@@ -4171,9 +4171,9 @@ describe("Paste HTML tables", () => {
             </tr>
             <tr style="height: 20.25pt;">
                 <td colspan="2">14pt MONO TEXT
-                []</td>
+                </td>
             </tr>
-        </tbody></table>`,
+        </tbody></table><p>[]<br></p>`,
         });
     });
 
@@ -4281,10 +4281,10 @@ describe("Paste HTML tables", () => {
                     text on color background</td>
             </tr>
             <tr style="height: 21px;">
-                <td rowspan="1" colspan="2">14pt MONO TEXT[]</td>
+                <td rowspan="1" colspan="2">14pt MONO TEXT</td>
             </tr>
         </tbody>
-    </table>`,
+    </table><p>[]<br></p>`,
         });
     });
 
@@ -4410,10 +4410,10 @@ describe("Paste HTML tables", () => {
         </tr>
         <tr>
             <td colspan="2">
-                14pt MONO TEXT[]
+                14pt MONO TEXT
             </td>
         </tr>
-    </tbody></table>`,
+    </tbody></table><p>[]<br></p>`,
         });
     });
     test("should apply default table classes (table, table-bordered, o_table) on paste", async () => {
@@ -4487,10 +4487,10 @@ describe("Paste HTML tables", () => {
                                 </tr>
                                 <tr>
                                     <td>1</td>
-                                    <td>2[]</td>
+                                    <td>2</td>
                                 </tr>
                             </tbody>
-                        </table>
+                        </table><p>[]<br></p>
                     `),
         });
     });
@@ -4517,10 +4517,10 @@ describe("Paste HTML tables", () => {
                             <tbody>
                                 <tr>
                                     <th class="o_table_header">1</th>
-                                    <th class="o_table_header">2[]</th>
+                                    <th class="o_table_header">2</th>
                                 </tr>
                             </tbody>
-                        </table>
+                        </table><p>[]<br></p>
                     `),
         });
     });
