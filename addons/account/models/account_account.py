@@ -73,6 +73,7 @@ class AccountAccount(models.Model):
             ("liability_non_current", "Non-current Liabilities"),
             ("equity", "Equity"),
             ("equity_unaffected", "Current Year Earnings"),
+            ("equity_retained", "Retained Earnings"),
             ("income", "Income"),
             ("income_other", "Other Income"),
             ("expense", "Expenses"),
@@ -1012,6 +1013,8 @@ class AccountAccount(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        if any(vals.get('account_type') == 'equity_retained' for vals in vals_list):
+            self.env['res.currency']._invalidate_retained_earnings_accounts()
         records_list = []
 
         for company_ids, vals_list_for_company in itertools.groupby(vals_list, lambda v: v.get('company_ids', [])):
@@ -1053,6 +1056,9 @@ class AccountAccount(models.Model):
         return records
 
     def write(self, vals):
+        if 'account_type' in vals:
+            self.env['res.currency']._invalidate_retained_earnings_accounts()
+
         if 'code_mapping_ids' in vals and 'company_ids' in vals:
             # Ensure `code_mapping_ids` is written before `company_ids` so we don't trigger the `_ensure_code_is_unique`
             # constraint when writing multiple code mappings and multiple companies in the same call to `write`.

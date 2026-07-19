@@ -771,6 +771,9 @@ class ResCompany(models.Model):
     def write(self, vals):
         self._validate_locks(vals)
 
+        if 'fiscalyear_last_day' in vals or 'fiscalyear_last_month' in vals:
+            self.env['res.currency']._invalidate_consolidation_fiscal_years()
+
         self.env['res.company'].invalidate_model(fnames=[f'user_{field}' for field in LOCK_DATE_FIELDS if field in vals])
 
         # Reflect the change on accounts
@@ -1148,6 +1151,31 @@ class ResCompany(models.Model):
         self.ensure_one()
         date_from, date_to = date_utils.get_fiscal_year(current_date, day=self.fiscalyear_last_day, month=int(self.fiscalyear_last_month))
         return {'date_from': date_from, 'date_to': date_to}
+
+    def _get_fiscalyear_dates_from_custom_years(self, current_date, custom_fiscal_years):
+        """
+        Returns the dates of the fiscal year containing the provided date for this company, taking custom
+        fiscal years into account: the one containing the date is returned as is, otherwise the default
+        fiscal year is shrunk so that it doesn't overlap them (e.g. the gap between two custom fiscal years).
+
+        :param current_date: a datetime.date object.
+        :param custom_fiscal_years: the (date_from, date_to) dates of the custom fiscal years of the company,
+                                    at least those overlapping the default fiscal year containing `current_date`.
+        :return: a tuple (date_from, date_to).
+        """
+        self.ensure_one()
+        for custom_date_from, custom_date_to in custom_fiscal_years:
+            if custom_date_from <= current_date <= custom_date_to:
+                return custom_date_from, custom_date_to
+
+        default_date_from, default_date_to = date_utils.get_fiscal_year(current_date, day=self.fiscalyear_last_day, month=int(self.fiscalyear_last_month))
+        date_from, date_to = default_date_from, default_date_to
+        for custom_date_from, custom_date_to in custom_fiscal_years:
+            if custom_date_from <= default_date_from <= custom_date_to:
+                date_from = custom_date_to + timedelta(days=1)
+            if custom_date_from <= default_date_to <= custom_date_to:
+                date_to = custom_date_from - timedelta(days=1)
+        return date_from, date_to
 
     @api.depends('country_id', 'account_fiscal_country_id')
     def _compute_company_vat_placeholder(self):
