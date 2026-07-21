@@ -23,6 +23,15 @@ Activates:
     'data': [
         'data/tax_report_full.xml',
         'data/tax_report_simplified.xml',
+<<<<<<< de71439baed6af44b74b4f7bfe00183cee667581
+||||||| 78ab4fa1d72f86ec09ff97f9f5e31300555eb880
+        'data/res.country.state.csv',
+        'data/res_country_data.xml',
+=======
+        'data/res.country.state.csv',
+        'data/res_country_data.xml',
+        'views/report_invoice_templates.xml',
+>>>>>>> a4d77eb37d2df8721bc401d077302707a26ae074
     ],
     'demo': [
         'demo/demo_company.xml',
