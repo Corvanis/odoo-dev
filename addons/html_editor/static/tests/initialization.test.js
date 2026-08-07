@@ -387,3 +387,4 @@ describe("Editor config initialization", () => {
         });
     });
 });
+
