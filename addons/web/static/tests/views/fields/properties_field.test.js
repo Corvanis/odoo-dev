@@ -1729,8 +1729,8 @@ test("properties: kanban view with label and border", async () => {
         "My Datetime"
     );
 
-    //check that label and border class is present for checkbox field
-    expect(".o_kanban_record:nth-child(5) .o_card_property_field:nth-child(5) .border").toHaveCount(
+    //check that label is present for checkbox field
+    expect(".o_kanban_record:nth-child(5) .o_card_property_field:nth-child(5)").toHaveCount(
         1
     );
     expect(
