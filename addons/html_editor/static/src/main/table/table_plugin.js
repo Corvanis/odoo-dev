@@ -164,6 +164,11 @@ export class TablePlugin extends Plugin {
                     this.toolbarNamespace
             ),
         ],
+        is_formattable_node_predicates: (node, formatName) => {
+            if (formatName === "backgroundColor" && node.matches?.(".o_selected_td")) {
+                return node.isContentEditable;
+            }
+        },
         expandable_toolbar_namespaces_providers: "table",
         formattable_node_providers: (node, { applyStyle, formatSpec }) => {
             const formatName = formatSpec.id;
@@ -183,7 +188,6 @@ export class TablePlugin extends Plugin {
                 return td;
             }
         },
-        color_target_providers: (node) => closestElement(node, ".o_selected_td"),
         overlay_selection_target_rect_providers: this.getTableSelectionRangeRect.bind(this),
         selected_background_color_providers: withSequence(
             5,

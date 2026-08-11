@@ -223,6 +223,22 @@ test("should not apply background color on an uneditable selected cell in a tabl
     });
 });
 
+test("should remove the background color of a cell whose only content is an image", async () => {
+    await testEditor({
+        contentBefore: unformat(`
+                <table><tbody>
+                    <tr><td class="o_selected_td" style="background-color: rgb(255, 0, 0);">[<img src="#">]</td></tr>
+                </tbody></table>
+            `),
+        stepFunction: setColor("", "backgroundColor"),
+        contentAfter: unformat(`
+                <table><tbody>
+                    <tr><td>[<img src="#">]</td></tr>
+                </tbody></table>
+            `),
+    });
+});
+
 test("should not apply span tag to t nodes (protects if else nodes separation)", async () => {
     await testEditor({
         contentBefore: unformat(`[

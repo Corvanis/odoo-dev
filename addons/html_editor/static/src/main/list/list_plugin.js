@@ -227,13 +227,17 @@ export class ListPlugin extends Plugin {
             }
         },
 
-        /** Providers */
-        color_target_providers: (node) => {
-            const li = closestElement(node, isListItem);
-            if (li && this.dependencies.selection.areNodeContentsFullySelected(li)) {
-                return li;
+        is_formattable_node_predicates: (node, formatName) => {
+            if (
+                LIST_ITEM_FORMATS.includes(formatSpec.id) &&
+                isListItem(node) &&
+                this.dependencies.selection.areNodeContentsFullySelected(node)
+            ) {
+                return node.isContentEditable;
             }
         },
+
+        /** Providers */
         formattable_node_providers: (node, { formatProps, formatSpec }) => {
             if (!LIST_ITEM_FORMATS.includes(formatSpec.id) || isColorGradient(formatProps?.color)) {
                 return;
