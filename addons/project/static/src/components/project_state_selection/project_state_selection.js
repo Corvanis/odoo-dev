@@ -13,6 +13,10 @@ export class ProjectStateSelectionField extends StateSelectionField {
         this.colors = STATUS_COLORS;
     }
 
+    statusColor(value) {
+        return this.colors[value] ? `o_status_bubble o_color_bubble_${this.colors[value]}` : "bg-200 text-muted";
+    }
+
     /**
      * @override
      */
