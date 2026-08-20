@@ -170,8 +170,8 @@ describe("backward", () => {
                         stepFunction: deleteBackward,
                         contentAfter: unformat(`
                             <div>
-                                <div class="oe_unbreakable">a[]</div>
-                                <div class="oe_unbreakable">f</div>
+                                <div class="oe_unbreakable">a</div>
+                                <div class="oe_unbreakable">[]f</div>
                             </div>`),
                     });
                 });
@@ -233,10 +233,10 @@ describe("backward", () => {
                         stepFunction: deleteBackward,
                         contentAfter: unformat(`
                             <div>
-                                <div class="oe_unbreakable">a[]</div>
+                                <div class="oe_unbreakable">a</div>
                             </div>
                             <div>
-                                <div class="oe_unbreakable">l</div>
+                                <div class="oe_unbreakable">[]l</div>
                             </div>`),
                     });
                 });
@@ -267,7 +267,7 @@ describe("backward", () => {
             await testEditor({
                 contentBefore: `<p>ab[c</p><p class="oe_unbreakable">]def</p>`,
                 stepFunction: deleteBackward,
-                contentAfter: `<p>ab[]</p><p class="oe_unbreakable">def</p>`,
+                contentAfter: `<p>ab</p><p class="oe_unbreakable">[]def</p>`,
             });
         });
 
@@ -283,7 +283,7 @@ describe("backward", () => {
             await testEditor({
                 contentBefore: `<p>abc[</p><p class="oe_unbreakable">d]ef</p>`,
                 stepFunction: deleteBackward,
-                contentAfter: `<p>abc[]</p><p class="oe_unbreakable">ef</p>`,
+                contentAfter: `<p>abc</p><p class="oe_unbreakable">[]ef</p>`,
             });
         });
     });
@@ -565,9 +565,9 @@ describe("list", () => {
                         </ol>`),
                 stepFunction: deleteBackward,
                 contentAfter: unformat(`
-                        <p class="oe_unbreakable">a[]</p>
+                        <p class="oe_unbreakable">a</p>
                         <ol>
-                            <li>ef</li>
+                            <li>[]ef</li>
                             <li>ghi</li>
                         </ol>`),
             });
@@ -586,10 +586,10 @@ describe("list", () => {
                 stepFunction: deleteBackward,
                 contentAfter: unformat(`
                         <div class="oe_unbreakable">
-                            <p>a[]</p>
+                            <p>a</p>
                         </div>
                         <ol>
-                            <li>ef</li>
+                            <li>[]ef</li>
                             <li>ghi</li>
                         </ol>`),
             });
