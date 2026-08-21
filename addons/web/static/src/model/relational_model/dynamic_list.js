@@ -144,19 +144,13 @@ export class DynamicList extends DataPoint {
                     this._removeRecords([editedRecord.id]);
                 }
             } else {
-                let isValid = true;
                 if (!this.model._urgentSave) {
-                    isValid = await editedRecord.checkValidity();
                     editedRecord = this.editedRecord;
                     if (!editedRecord) {
                         return true;
                     }
                 }
-                if (editedRecord.isNew && !editedRecord.dirty) {
-                    this._removeRecords([editedRecord.id]);
-                } else if (isValid || editedRecord.dirty) {
-                    canProceed = await editedRecord.save();
-                }
+                canProceed = await editedRecord.save();
             }
 
             editedRecord = this.editedRecord;
@@ -376,11 +370,17 @@ export class DynamicList extends DataPoint {
                 invalidRecords.push(record);
             }
         }
-        const discardInvalidRecords = () => invalidRecords.forEach((record) => record._discard());
+        const discardInvalidRecords = (excludeEditedRecord = false) =>
+            invalidRecords.forEach((record) => {
+                if (excludeEditedRecord && record === editedRecord) {
+                    return;
+                }
+                record._discard();
+            });
 
         if (validRecords.length === 0) {
             editedRecord._displayInvalidFieldNotification();
-            discardInvalidRecords();
+            discardInvalidRecords(true);
             return false;
         }
 
