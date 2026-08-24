@@ -10,6 +10,7 @@
     'category': 'Accounting/Localizations/Account Charts',
     'depends': [
         'account',
+        'l10n_account_withholding_tax',
     ],
     'data': [
         'data/account_chart_template_data.xml',
@@ -20,4 +21,5 @@
     ],
     'author': 'Odoo S.A.',
     'license': 'LGPL-3',
+    'post_init_hook': '_l10n_np_post_init',
 }
