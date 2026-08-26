@@ -1,10 +1,6 @@
 import { Store as BaseStore, fields, makeStore } from "@mail/model/export";
 import { formatLocalDateTime, resolveTimeZoneName } from "@mail/utils/common/dates";
-import {
-    attClassObjectToString,
-    generateEmojisOnHtml,
-    prettifyMessageText,
-} from "@mail/utils/common/format";
+import { attClassObjectToString, generateEmojisOnHtml } from "@mail/utils/common/format";
 import { nestedShallowEqual } from "@mail/utils/common/signal";
 
 import { proxy, shallowEqual, usePlugin } from "@odoo/owl";
@@ -841,7 +837,7 @@ export class Store extends BaseStore {
                 ...thread.getFetchParams(),
                 fetch_params: {
                     search_filter,
-                    search_term: (await prettifyMessageText(searchTerm)).replaceAll(nbsp, " "), // formatted like message_post
+                    search_term: searchTerm.replaceAll(nbsp, " "),
                     before,
                 },
             },

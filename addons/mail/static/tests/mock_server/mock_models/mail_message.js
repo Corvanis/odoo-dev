@@ -607,8 +607,13 @@ export class MailMessage extends models.ServerModel {
             const irAttachmentIds = IrAttachment.search([["name", "ilike", search_term]]);
             const authorIds = this.env["res.partner"].search([["name", "ilike", search_term]]);
             const guestIds = this.env["mail.guest"].search([["name", "ilike", search_term]]);
+            // Body is stored as HTML: escape like `html.escape(search_term, quote=False)`.
+            const bodySearchTerm = search_term
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;");
             const message_domain = Domain.or([
-                [["body", "ilike", search_term]],
+                [["body", "ilike", bodySearchTerm]],
                 [["attachment_ids", "in", irAttachmentIds]],
                 [["author_id", "in", authorIds]],
                 [["author_guest_id", "in", guestIds]],
