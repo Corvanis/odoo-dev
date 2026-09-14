@@ -12,13 +12,12 @@ from odoo.addons.portal.controllers.portal import pager as portal_pager
 
 
 class CustomerPortal(payment_portal.PaymentPortal):
-
     def _prepare_portal_counter_values(self, counter):
         partner = self.env.user.partner_id
-        if counter == 'quotation_count':
-            return 'sale.order', self._prepare_quotations_domain(partner), 'read'
-        if counter == 'order_count':
-            return 'sale.order', self._prepare_orders_domain(partner), 'read'
+        if counter == "quotation_count":
+            return "sale.order", self._prepare_quotations_domain(partner), "read"
+        if counter == "order_count":
+            return "sale.order", self._prepare_orders_domain(partner), "read"
         return super()._prepare_portal_counter_values(counter)
 
     def _prepare_quotations_domain(self, partner):
@@ -503,7 +502,12 @@ class PaymentPortal(payment_portal.PaymentPortal):
             "sale_order_id": order_id,  # Include the SO to allow Subscriptions tokenizing the tx
         })
         tx_sudo = self._create_transaction(
-            custom_create_values={"sale_order_ids": [Command.set([order_id])]}, **kwargs
+            custom_create_values={
+                "sale_order_ids": [Command.set([order_id])],
+                "billing_partner_id": order_sudo.partner_invoice_id.id,
+                "shipping_partner_id": order_sudo.partner_shipping_id.id,
+            },
+            **kwargs,
         )
 
         return tx_sudo._get_processing_values()
