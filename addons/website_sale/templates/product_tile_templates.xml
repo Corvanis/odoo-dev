@@ -118,10 +118,11 @@
             t-set="all_images"
             t-value="product_variant._get_images()"
         />
+        <!-- TODO(loti): remove `_get_shop_images` check in master. -->
         <t
             t-else=""
             t-set="all_images"
-            t-value="product._get_images()"
+            t-value="product._get_shop_images() if '_get_shop_images' in dir(product) else product._get_images()"
         />
         <t
             t-set="primary_image_holder"
