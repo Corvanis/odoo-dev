@@ -76,7 +76,12 @@ class ResPartner(models.Model):
         mandatory_billing_fields = self._get_mandatory_billing_address_fields(
             self.country_id, **kwargs
         )
-        return all(self.read(mandatory_billing_fields)[0].values())
+        mandatory_identifiers = self._get_required_additional_identifiers(
+            self.country_id, self.vat, **kwargs,
+        )
+        return all(self.read(mandatory_billing_fields)[0].values()) and all(
+            self._get_additional_identifier(key) for key in mandatory_identifiers
+        )
 
     def _check_delivery_address(self, **kwargs):
         """Check that all mandatory delivery fields are filled for the given partner.
@@ -154,3 +159,25 @@ class ResPartner(models.Model):
             field_names.add('zip')
 
         return field_names
+
+    def _get_mandatory_additional_identifiers(self, country_sudo, **_kwargs):  # noqa: ARG002
+        """Return the set of `additional_identifiers` keys mandatory on a billing address.
+
+        :param res.country country_sudo: The country to use to build the set of mandatory keys.
+        :return: The set of mandatory additional identifier keys.
+        :rtype: set
+        """
+        return set()
+
+    def _get_required_additional_identifiers(self, country_sudo, vat, **kwargs):
+        """Return the mandatory identifier keys, minus the individual ones a VAT number rules out.
+
+        :param res.country country_sudo: The country to use to build the set of mandatory keys.
+        :param str vat: The VAT number the address is submitted with, if any.
+        :return: The set of additional identifier keys that must be filled in.
+        :rtype: set
+        """
+        identifier_keys = self._get_mandatory_additional_identifiers(country_sudo, **kwargs)
+        if not vat:
+            return identifier_keys
+        return {key for key in identifier_keys if not self._is_individual_identifier(key)}
