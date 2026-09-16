@@ -78,12 +78,7 @@ class PaymentPortal(payment_portal.PaymentPortal):
         if delay_token_charge := kwargs.get("flow") == "token":
             request.update_context(delay_token_charge=True)  # wait until after tx validation
         tx_sudo = self._create_transaction(
-            custom_create_values={
-                "sale_order_ids": [Command.set([order_id])],
-                "billing_partner_id": order_sudo.partner_invoice_id.id,
-                "shipping_partner_id": order_sudo.partner_shipping_id.id,
-            },
-            **kwargs,
+            custom_create_values={"sale_order_ids": [Command.set([order_id])]}, **kwargs
         )
 
         # Store the new transaction into the transaction list and if there's an old one, we remove
