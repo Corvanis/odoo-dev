@@ -21562,6 +21562,34 @@ test(`column tag: stacks multiple fields in a single cell`, async () => {
     ).toHaveCount(2, { message: "Both sub-fields appear in the second cell" });
 });
 
+test(`column tag: empty value in a stacked cell`, async () => {
+    await mountView({
+        resModel: "foo",
+        type: "list",
+        arch: `
+            <list>
+                <field name="foo"/>
+                <column>
+                    <field name="int_field"/>
+                    <field name="date"/>
+                </column>
+            </list>
+        `,
+    });
+
+    // only the first record has a date
+    const dates = queryAll(`tbody .o_column_group_field[data-field-name='date']`);
+    expect(dates).toHaveLength(4);
+    expect(dates[0]).toHaveText("Jan 25, 2017");
+    expect(dates[1]).toHaveText("\u00a0", {
+        raw: true,
+        message: "an empty stacked value is rendered as a non-breaking space",
+    });
+    expect(queryRect(dates[1]).height).toBe(queryRect(dates[0]).height, {
+        message: "an empty stacked value is as tall as a filled one, keeping stacks aligned",
+    });
+});
+
 test(`column tag: uses string attribute as header label`, async () => {
     await mountView({
         resModel: "foo",
@@ -22014,8 +22042,12 @@ test(`column tag: required styling is applied to the required sub-field`, async 
     const groupFields = queryAll(`.o_selected_row td[name='foo'] .o_column_group_field`);
     expect(groupFields[0]).toHaveClass("o_required_modifier");
     expect(groupFields[1]).not.toHaveClass("o_required_modifier");
-    expect(groupFields[0]).toHaveStyle({ "border-bottom-width": "1px" });
-    expect(groupFields[1]).toHaveStyle({ "border-bottom-width": "0px" });
+    expect(groupFields[0]).toHaveStyle({ "border-bottom-width": "0px" });
+    expect(`.o_selected_row td[name='foo']`).toHaveStyle({ "border-bottom-width": "0px" });
+    // the cell stacks several fields, so the underline is carried by the input
+    expect(`.o_selected_row .o_field_widget[name='foo'] .o_input`).toHaveStyle({
+        "border-bottom-width": "1px",
+    });
 });
 
 test.tags("desktop");

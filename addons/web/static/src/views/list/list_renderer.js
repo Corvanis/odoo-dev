@@ -1178,23 +1178,39 @@ export class ListRenderer extends Component {
             this.cellClassByColumn[column.id] = classNames;
         }
         const classNames = [...this.cellClassByColumn[column.id]];
+        // The cell takes the modifiers of the field it displays, a column group
+        // displaying a lone field included. When it stacks several of them, the cell
+        // takes none and each field styles itself (see getColumnGroupFieldClasses).
+        let cellField = null;
         if (column.type === "field") {
-            if (evaluateBooleanExpr(column.required, record.evalContextWithVirtualIds)) {
+            cellField = column;
+        } else if (column.type === "column_group") {
+            const visibleFields = column.fields.filter((fieldInfo) =>
+                this.isColumnGroupFieldVisible(column, fieldInfo, record)
+            );
+            if (visibleFields.length > 1) {
+                classNames.push("o_stacked_fields");
+            } else {
+                cellField = visibleFields[0] || null;
+            }
+        }
+        if (cellField) {
+            if (evaluateBooleanExpr(cellField.required, record.evalContextWithVirtualIds)) {
                 classNames.push("o_required_modifier");
             }
-            if (record.isFieldInvalid(column.name)) {
+            if (record.isFieldInvalid(cellField.name)) {
                 classNames.push("o_invalid_cell");
             }
-            if (this.isFieldReadonly(column, record)) {
+            if (this.isFieldReadonly(cellField, record)) {
                 classNames.push("o_readonly_modifier");
             }
-            if (this.canUseFormatter(column, record)) {
-                classNames.push(...this.getDecorationClassNames(column, record));
+            if (this.canUseFormatter(cellField, record)) {
+                classNames.push(...this.getDecorationClassNames(cellField, record));
             }
             if (
                 record.isInEdition &&
                 this.editedRecord() &&
-                this.isFieldReadonly(column, this.editedRecord())
+                this.isFieldReadonly(cellField, this.editedRecord())
             ) {
                 classNames.push("text-muted");
             } else if (this.isRecordAvailable(record)) {
