@@ -4,6 +4,7 @@
 from datetime import datetime
 
 from odoo import api, fields, models
+from odoo.addons.base.models.ir_model import MODULE_UNINSTALL_FLAG
 
 
 class WebsiteEventMenu(models.Model):
@@ -75,5 +76,8 @@ class WebsiteEventMenu(models.Model):
             self._copy_children_views(new_child_view, view.inherit_children_ids, website_id)
 
     def unlink(self):
-        self.view_id.sudo().unlink()
+        view_sudo = self.view_id.sudo()
+        if view_sudo.inherit_children_ids:
+            view_sudo.inherit_children_ids.with_context({MODULE_UNINSTALL_FLAG: True}).unlink()
+        view_sudo.unlink()
         return super().unlink()
