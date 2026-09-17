@@ -558,7 +558,20 @@ class AccountEdiXmlUBL20(models.AbstractModel):
             for vals in allowance_charge_vals_list
             if vals.get('from_fixed_tax')
         )
+<<<<<<< 739e30fb132fd5c2bab9aaf83b3a4afeed7d61db
         return {
+||||||| 7f8eadd121af45e243fb0e943815f29f7e3ab94a
+        return self._add_invoice_extra_line_vals(line, {
+=======
+
+        period_vals = {}
+        # deferred_start_date & deferred_end_date are enterprise-only fields
+        if line._fields.get('deferred_start_date') and (line.deferred_start_date or line.deferred_end_date):
+            period_vals.update({'start_date': line.deferred_start_date})
+            period_vals.update({'end_date': line.deferred_end_date})
+
+        return self._add_invoice_extra_line_vals(line, {
+>>>>>>> 04d13e7f159c1c9b89861013593e9c2a3d20b9f1
             'currency': line.currency_id,
             'currency_dp': self._get_currency_decimal_places(line.currency_id),
             'id': line_id + 1,
@@ -569,7 +582,14 @@ class AccountEdiXmlUBL20(models.AbstractModel):
             'tax_total_vals': self._get_invoice_line_tax_totals_vals_list(line, taxes_vals),
             'item_vals': self._get_invoice_line_item_vals(line, taxes_vals),
             'price_vals': self._get_invoice_line_price_vals(line),
+<<<<<<< 739e30fb132fd5c2bab9aaf83b3a4afeed7d61db
         }
+||||||| 7f8eadd121af45e243fb0e943815f29f7e3ab94a
+        })
+=======
+            'invoice_period_vals_list': [period_vals] if period_vals else [],
+        })
+>>>>>>> 04d13e7f159c1c9b89861013593e9c2a3d20b9f1
 
     def _get_invoice_monetary_total_vals(self, invoice, taxes_vals, line_extension_amount, allowance_total_amount, charge_total_amount):
         # Old helper used only for non-BIS3 UBLs, removed in saas-18.4.
@@ -910,7 +930,231 @@ class AccountEdiXmlUBL20(models.AbstractModel):
         logs += partner_logs + currency_logs + line_logs + allowance_charges_logs + rounding_logs
         return logs
 
+<<<<<<< 739e30fb132fd5c2bab9aaf83b3a4afeed7d61db
     def _get_tax_nodes(self, tree):
+||||||| 7f8eadd121af45e243fb0e943815f29f7e3ab94a
+    def _import_fill_invoice_line_form_batched(self, trees, invoice_lines, qty_factor):
+        logs = []
+
+        all_inv_line_vals = []
+        all_tax_nodes = []
+        previously_retrieved_product = defaultdict()
+        for tree, invoice_line in zip(trees, invoice_lines):
+
+            default_code = self._find_value('./cac:Item/cac:SellersItemIdentification/cbc:ID', tree)
+            name = self._find_value('./cac:Item/cbc:Name', tree)
+            barcode = self._find_value("./cac:Item/cac:StandardItemIdentification/cbc:ID[@schemeID='0160']", tree)
+            company = invoice_line.company_id
+
+            # Product.
+            product_params = {
+                'default_code': default_code,
+                'name': name,
+                'barcode': barcode,
+                'company': company,
+            }
+            product_key = tuple(product_params.values())
+            if product_key not in previously_retrieved_product:
+                previously_retrieved_product[product_key] = self.env['product.product']._retrieve_product(**product_params)
+
+            invoice_line.product_id = previously_retrieved_product[product_key]
+
+            # Description
+            description_node = tree.find('./{*}Item/{*}Description')
+            name_node = tree.find('./{*}Item/{*}Name')
+            if description_node is not None:
+                invoice_line.name = description_node.text
+            elif name_node is not None:
+                invoice_line.name = name_node.text  # Fallback on Name if Description is not found.
+
+            xpath_dict = {
+                'basis_qty': [
+                    './{*}Price/{*}BaseQuantity',
+                ],
+                'gross_price_unit': './{*}Price/{*}AllowanceCharge/{*}BaseAmount',
+                'rebate': './{*}Price/{*}AllowanceCharge/{*}Amount',
+                'net_price_unit': './{*}Price/{*}PriceAmount',
+                'billed_qty':  './{*}InvoicedQuantity' if invoice_line.move_id.move_type in ('in_invoice', 'out_invoice') or qty_factor == -1 else './{*}CreditedQuantity',
+                'allowance_charge': './/{*}AllowanceCharge',
+                'allowance_charge_indicator': './{*}ChargeIndicator',
+                'allowance_charge_amount': './{*}Amount',
+                'allowance_charge_reason': './{*}AllowanceChargeReason',
+                'allowance_charge_reason_code': './{*}AllowanceChargeReasonCode',
+                'line_total_amount': './{*}LineExtensionAmount',
+            }
+            # Taxes
+            all_inv_line_vals.append(self._import_fill_invoice_line_values(tree, xpath_dict, invoice_line, qty_factor))
+            # retrieve tax nodes
+            tax_nodes = tree.findall('.//{*}Item/{*}ClassifiedTaxCategory/{*}Percent')
+            if not tax_nodes:
+                for elem in tree.findall('.//{*}TaxTotal'):
+                    percentage_nodes = elem.findall('.//{*}TaxSubtotal/{*}TaxCategory/{*}Percent')
+                    if not percentage_nodes:
+                        percentage_nodes = elem.findall('.//{*}TaxSubtotal/{*}Percent')
+                    tax_nodes += percentage_nodes
+            all_tax_nodes.append(tax_nodes)
+
+        return self._import_fill_invoice_line_taxes_batched(all_tax_nodes, invoice_lines, all_inv_line_vals, logs)
+
+    def _import_fill_invoice_line_form(self, tree, invoice_line, qty_factor):
+        logs = []
+
+        # Product.
+        invoice_line.product_id = self.env['product.product']._retrieve_product(
+            default_code=self._find_value('./cac:Item/cac:SellersItemIdentification/cbc:ID', tree),
+            name=self._find_value('./cac:Item/cbc:Name', tree),
+            barcode=self._find_value("./cac:Item/cac:StandardItemIdentification/cbc:ID[@schemeID='0160']", tree),
+            company=invoice_line.company_id
+        )
+        # Description
+        description_node = tree.find('./{*}Item/{*}Description')
+        name_node = tree.find('./{*}Item/{*}Name')
+        if description_node is not None:
+            invoice_line.name = description_node.text
+        elif name_node is not None:
+            invoice_line.name = name_node.text  # Fallback on Name if Description is not found.
+
+        xpath_dict = {
+            'basis_qty': [
+                './{*}Price/{*}BaseQuantity',
+            ],
+            'gross_price_unit': './{*}Price/{*}AllowanceCharge/{*}BaseAmount',
+            'rebate': './{*}Price/{*}AllowanceCharge/{*}Amount',
+            'net_price_unit': './{*}Price/{*}PriceAmount',
+            'billed_qty':  './{*}InvoicedQuantity' if invoice_line.move_id.move_type in ('in_invoice', 'out_invoice') or qty_factor == -1 else './{*}CreditedQuantity',
+            'allowance_charge': './/{*}AllowanceCharge',
+            'allowance_charge_indicator': './{*}ChargeIndicator',
+            'allowance_charge_amount': './{*}Amount',
+            'allowance_charge_reason': './{*}AllowanceChargeReason',
+            'allowance_charge_reason_code': './{*}AllowanceChargeReasonCode',
+            'line_total_amount': './{*}LineExtensionAmount',
+        }
+
+        # Taxes
+        inv_line_vals = self._import_fill_invoice_line_values(tree, xpath_dict, invoice_line, qty_factor)
+        # retrieve tax nodes
+=======
+    def _import_fill_invoice_line_form_batched(self, trees, invoice_lines, qty_factor):
+        logs = []
+
+        all_inv_line_vals = []
+        all_tax_nodes = []
+        previously_retrieved_product = defaultdict()
+        for tree, invoice_line in zip(trees, invoice_lines):
+
+            default_code = self._find_value('./cac:Item/cac:SellersItemIdentification/cbc:ID', tree)
+            name = self._find_value('./cac:Item/cbc:Name', tree)
+            barcode = self._find_value("./cac:Item/cac:StandardItemIdentification/cbc:ID[@schemeID='0160']", tree)
+            company = invoice_line.company_id
+
+            # Product.
+            product_params = {
+                'default_code': default_code,
+                'name': name,
+                'barcode': barcode,
+                'company': company,
+            }
+            product_key = tuple(product_params.values())
+            if product_key not in previously_retrieved_product:
+                previously_retrieved_product[product_key] = self.env['product.product']._retrieve_product(**product_params)
+
+            invoice_line.product_id = previously_retrieved_product[product_key]
+
+            # Description
+            description_node = tree.find('./{*}Item/{*}Description')
+            name_node = tree.find('./{*}Item/{*}Name')
+            if description_node is not None:
+                invoice_line.name = description_node.text
+            elif name_node is not None:
+                invoice_line.name = name_node.text  # Fallback on Name if Description is not found.
+
+            # Start and End date (enterprise fields)
+            if invoice_line._fields.get('deferred_start_date'):
+                start_date = tree.find('./{*}InvoicePeriod/{*}StartDate')
+                end_date = tree.find('./{*}InvoicePeriod/{*}EndDate')
+                if start_date is not None and end_date is not None:  # there is a constraint forcing none or the two to be set
+                    invoice_line.write({
+                        'deferred_start_date': start_date.text,
+                        'deferred_end_date': end_date.text,
+                    })
+
+            xpath_dict = {
+                'basis_qty': [
+                    './{*}Price/{*}BaseQuantity',
+                ],
+                'gross_price_unit': './{*}Price/{*}AllowanceCharge/{*}BaseAmount',
+                'rebate': './{*}Price/{*}AllowanceCharge/{*}Amount',
+                'net_price_unit': './{*}Price/{*}PriceAmount',
+                'billed_qty':  './{*}InvoicedQuantity' if invoice_line.move_id.move_type in ('in_invoice', 'out_invoice') or qty_factor == -1 else './{*}CreditedQuantity',
+                'allowance_charge': './/{*}AllowanceCharge',
+                'allowance_charge_indicator': './{*}ChargeIndicator',
+                'allowance_charge_amount': './{*}Amount',
+                'allowance_charge_reason': './{*}AllowanceChargeReason',
+                'allowance_charge_reason_code': './{*}AllowanceChargeReasonCode',
+                'line_total_amount': './{*}LineExtensionAmount',
+            }
+            # Taxes
+            all_inv_line_vals.append(self._import_fill_invoice_line_values(tree, xpath_dict, invoice_line, qty_factor))
+            # retrieve tax nodes
+            tax_nodes = tree.findall('.//{*}Item/{*}ClassifiedTaxCategory/{*}Percent')
+            if not tax_nodes:
+                for elem in tree.findall('.//{*}TaxTotal'):
+                    percentage_nodes = elem.findall('.//{*}TaxSubtotal/{*}TaxCategory/{*}Percent')
+                    if not percentage_nodes:
+                        percentage_nodes = elem.findall('.//{*}TaxSubtotal/{*}Percent')
+                    tax_nodes += percentage_nodes
+            all_tax_nodes.append(tax_nodes)
+
+        return self._import_fill_invoice_line_taxes_batched(all_tax_nodes, invoice_lines, all_inv_line_vals, logs)
+
+    def _import_fill_invoice_line_form(self, tree, invoice_line, qty_factor):
+        logs = []
+
+        # Product.
+        invoice_line.product_id = self.env['product.product']._retrieve_product(
+            default_code=self._find_value('./cac:Item/cac:SellersItemIdentification/cbc:ID', tree),
+            name=self._find_value('./cac:Item/cbc:Name', tree),
+            barcode=self._find_value("./cac:Item/cac:StandardItemIdentification/cbc:ID[@schemeID='0160']", tree),
+            company=invoice_line.company_id
+        )
+        # Description
+        description_node = tree.find('./{*}Item/{*}Description')
+        name_node = tree.find('./{*}Item/{*}Name')
+        if description_node is not None:
+            invoice_line.name = description_node.text
+        elif name_node is not None:
+            invoice_line.name = name_node.text  # Fallback on Name if Description is not found.
+
+        # Start and End date (enterprise fields)
+        if invoice_line._fields.get('deferred_start_date'):
+            start_date = tree.find('./{*}InvoicePeriod/{*}StartDate')
+            end_date = tree.find('./{*}InvoicePeriod/{*}EndDate')
+            if start_date is not None and end_date is not None:  # there is a constraint forcing none or the two to be set
+                invoice_line.write({
+                    'deferred_start_date': start_date.text,
+                    'deferred_end_date': end_date.text,
+                })
+
+        xpath_dict = {
+            'basis_qty': [
+                './{*}Price/{*}BaseQuantity',
+            ],
+            'gross_price_unit': './{*}Price/{*}AllowanceCharge/{*}BaseAmount',
+            'rebate': './{*}Price/{*}AllowanceCharge/{*}Amount',
+            'net_price_unit': './{*}Price/{*}PriceAmount',
+            'billed_qty':  './{*}InvoicedQuantity' if invoice_line.move_id.move_type in ('in_invoice', 'out_invoice') or qty_factor == -1 else './{*}CreditedQuantity',
+            'allowance_charge': './/{*}AllowanceCharge',
+            'allowance_charge_indicator': './{*}ChargeIndicator',
+            'allowance_charge_amount': './{*}Amount',
+            'allowance_charge_reason': './{*}AllowanceChargeReason',
+            'allowance_charge_reason_code': './{*}AllowanceChargeReasonCode',
+            'line_total_amount': './{*}LineExtensionAmount',
+        }
+
+        # Taxes
+        inv_line_vals = self._import_fill_invoice_line_values(tree, xpath_dict, invoice_line, qty_factor)
+        # retrieve tax nodes
+>>>>>>> 04d13e7f159c1c9b89861013593e9c2a3d20b9f1
         tax_nodes = tree.findall('.//{*}Item/{*}ClassifiedTaxCategory/{*}Percent')
         if not tax_nodes:
             for elem in tree.findall('.//{*}TaxTotal'):
