@@ -42,6 +42,11 @@ class EventBooth(models.Model):
         action['res_id'] = self.sale_order_id.id
         return action
 
+    def _get_release_values(self):
+        # Booth registrations are kept, only the booking is undone: confirming
+        # the order again re-books the very same booths, if still available.
+        return {**super()._get_release_values(), 'sale_order_line_id': False, 'is_paid': False}
+
     def _get_booth_multiline_description(self):
         return '%s : \n%s' % (
             self.event_id.display_name,
