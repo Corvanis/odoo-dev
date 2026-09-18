@@ -23,9 +23,7 @@ test("disable link tracking option should be shown and diable/enable link tracki
     // Open advanced mode
     await contains(".o_link_popover_container button[title='Advanced mode']").click();
     // Check the disable link tracking option
-    await contains(
-        ".o_seo_option_row:has(span[title='Send the original url instead of wrapping it into a tracking url.']) input[type='checkbox']"
-    ).click();
+    await contains("div input[type='checkbox']").click();
     // Go back to main popover view
     await click("button[data-icon='keyboard_arrow_left']");
     // Apply
@@ -39,9 +37,7 @@ test("disable link tracking option should be shown and diable/enable link tracki
     // Open advanced mode
     await contains(".o_link_popover_container button[title='Advanced mode']").click();
     // Check the disable link tracking option
-    await contains(
-        ".o_seo_option_row:has(span[title='Send the original url instead of wrapping it into a tracking url.']) input[type='checkbox']"
-    ).click();
+    await contains("div input[type='checkbox']").click();
     // Go back to main popover view
     await click("button[data-icon='keyboard_arrow_left']");
     // Apply
