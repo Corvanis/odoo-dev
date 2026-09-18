@@ -218,6 +218,14 @@ export class CustomizeMailingVariable extends BuilderAction {
     }
     apply({ params, value }) {
         const oldValue = this.getValue(...arguments);
+
+        if (params.variable.includes("color") && value === "") {
+            if (params.variable.includes("background-color")) {
+                value = "transparent";
+            } else {
+                value = "currentColor";
+            }
+        }
         this.dependencies.history.applyCustomMutation({
             apply: () => {
                 this.dependencies["mass_mailing.CustomizeMailingPlugin"].setVariable(
