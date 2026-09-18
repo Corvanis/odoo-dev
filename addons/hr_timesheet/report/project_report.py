@@ -15,10 +15,18 @@ class ReportProjectTaskUser(models.Model):
     overtime = fields.Float(readonly=True, groups="hr_timesheet.group_hr_timesheet_user")
 
     def _select(self):
+<<<<<<< 611916f5b6219720344505fa119ca63018ab8168
         return SQL("""%s,
                 CASE WHEN COALESCE(t.allocated_hours, 0) = 0 THEN NULL ELSE t.effective_hours * 100 / t.allocated_hours END as progress,
+||||||| bccb550d5a5a1dfd81e6c234a7fa9a7794fc5702
+        return super()._select() + """,
+                CASE WHEN COALESCE(t.allocated_hours, 0) = 0 THEN NULL ELSE t.effective_hours * 100 / t.allocated_hours END as progress,
+=======
+        return super()._select() + """,
+                CASE WHEN COALESCE(t.allocated_hours, 0) = 0 THEN NULL ELSE t.progress * 100 END as progress,
+>>>>>>> 6182946edd7230482ec3b3c0f5b843dd5ce161da
                 NULLIF(t.effective_hours, 0) as effective_hours,
-                CASE WHEN COALESCE(t.allocated_hours, 0) = 0 THEN NULL ELSE t.allocated_hours - t.effective_hours END as remaining_hours,
+                CASE WHEN COALESCE(t.allocated_hours, 0) = 0 THEN NULL ELSE t.remaining_hours END as remaining_hours,
                 CASE WHEN t.allocated_hours > 0 THEN t.remaining_hours / t.allocated_hours ELSE 0 END as remaining_hours_percentage,
                 NULLIF(t.allocated_hours, 0) as allocated_hours,
                 NULLIF(t.overtime, 0) as overtime
@@ -28,5 +36,15 @@ class ReportProjectTaskUser(models.Model):
         return SQL("""%s,
                 t.effective_hours,
                 t.allocated_hours,
+<<<<<<< 611916f5b6219720344505fa119ca63018ab8168
                 t.overtime
         """, super()._group_by())
+||||||| bccb550d5a5a1dfd81e6c234a7fa9a7794fc5702
+                t.overtime
+        """
+=======
+                t.overtime,
+                t.progress,
+                t.remaining_hours
+        """
+>>>>>>> 6182946edd7230482ec3b3c0f5b843dd5ce161da
