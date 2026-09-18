@@ -1,5 +1,5 @@
 from odoo.fields import Command
-from odoo.tests import tagged
+from odoo.tests import HttpCase, tagged
 
 from odoo.addons.l10n_ar.tests.common import TestArCommon
 from odoo.addons.website_sale.tests.common import MockRequest
@@ -148,3 +148,78 @@ class TestL10nArWebsiteSale(TestArCommon):
                 'list_price': 1452.00,                # (1000+200) + 21%
                 'l10n_ar_price_tax_excluded': 1200.00,
             })
+
+    def test_dni_required_above_final_consumer_limit(self):
+        """Strictly above the limit a DNI is required, and the checkout says why."""
+        ar, step = self.env.ref('base.ar'), self.env['website.checkout.step']
+        buyer = self.env['res.partner'].create({'name': "Juan Perez", 'country_id': ar.id})
+        cart = self.env['sale.order'].sudo().create({
+            'partner_id': buyer.id,
+            'website_id': self.ar_website.id,
+            'order_line': [Command.create({'product_id': self.product_1.product_variant_id.id})],
+        })
+        self.ar_website.l10n_ar_final_consumer_limit = cart.amount_total
+        self.assertFalse(buyer._get_mandatory_additional_identifiers(ar, order_sudo=cart))
+
+        self.ar_website.l10n_ar_final_consumer_limit = cart.amount_total - 0.01
+        self.assertEqual(buyer._get_mandatory_additional_identifiers(ar, order_sudo=cart), {'AR_DNI'})
+        self.assertIn("exceeds the maximum amount", step._get_billing_address_alert(cart))
+        buyer.additional_identifiers = {'AR_DNI': '12345678'}
+        self.assertNotIn("exceeds the maximum amount", step._get_billing_address_alert(cart))
+
+
+@tagged('post_install_l10n', 'post_install', '-at_install')
+class TestL10nArWebsiteSaleCheckout(TestArCommon, HttpCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.website = cls.env['website'].sudo().create({
+            'name': 'AR Website',
+            'company_id': cls.company_data['company'].id,
+            'domain': cls.base_url(),
+        })
+        cls.env.ref('website_sale.address_b2b').sudo().active = False
+        cls.product = cls.env['product.product'].sudo().create({
+            'name': 'Product', 'list_price': 1000, 'is_published': True,
+        })
+
+    def _submit_billing(self, login, country, **extra):
+        user = self._create_new_portal_user(login=login)
+        cart = self.env['sale.order'].sudo().create({
+            'partner_id': user.partner_id.id,
+            'website_id': self.website.id,
+            'order_line': [Command.create({'product_id': self.product.id})],
+        })
+        self.authenticate(user.login, user.login, session_extra={'sale_order_id': cart.id})
+        res = self.url_open('/shop/address/submit', data={
+            'csrf_token': self.csrf_token(),
+            'partner_id': user.partner_id.id,
+            'address_type': 'billing',
+            'name': "Juan Perez",
+            'email': 'juan@example.com',
+            'phone': '+541112345678',
+            'street': "Calle Falsa 123",
+            'city': "Rosario",
+            'zip': '2000',
+            'country_id': country.id,
+            **extra,
+        }).json()
+        return user.partner_id, res
+
+    def test_hidden_arca_responsibility_is_defaulted(self):
+        """A hidden ARCA type follows the country, a shown one defaults to CF."""
+        state = {'state_id': self.env.ref('base.state_ar_s').id}
+        for country, extra, responsibility in (
+            ('base.ar', state, 'l10n_ar.res_CF'),
+            ('base.fr', {}, 'l10n_ar.res_EXT'),
+        ):
+            partner, res = self._submit_billing(country, self.env.ref(country), **extra)
+            self.assertNotIn('invalid_fields', res)
+            self.assertEqual(partner.l10n_ar_afip_responsibility_type_id, self.env.ref(responsibility))
+
+        self.env.ref('website_sale.address_b2b').sudo().active = True
+        partner, res = self._submit_billing('b2b', self.env.ref('base.ar'), **state)
+        self.assertEqual(res['invalid_fields'], ['l10n_ar_afip_responsibility_type_id'])
+        page = self.url_open(f'/shop/address?partner_id={partner.id}&address_type=billing').text
+        self.assertRegex(page, rf'value="{self.env.ref("l10n_ar.res_CF").id}"\s+selected')
