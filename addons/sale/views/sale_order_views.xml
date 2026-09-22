@@ -506,8 +506,13 @@
                             <list
                                 string="Sales Order Lines"
                                 editable="bottom"
+<<<<<<< 71821e0d82a4a7c4967fd0c4726ad1d7f84a1273
                                 limit="200"
                                 decoration-warning="state in ['draft', 'sent'] and is_product_archived"
+||||||| 7c7e60ab96e707ba7df0a1101e223743b364d9ff
+                                limit="200"
+=======
+>>>>>>> 422448dd39c406ec82b3cbbb9df4193aa3050aa5
                             >
                                 <control>
                                     <create name="add_product_control" string="Add a product"/>
