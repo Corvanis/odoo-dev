@@ -1094,7 +1094,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             leaves.action_approve()
 
             allocation_days = self.employee_emp._get_consumed_leaves(self.holidays_type_2)[0]
-            primary_unit = 'hours' if unit == 'hour' else 'days'
+            primary_unit = 'hour' if unit == 'hour' else 'day'
 
             self.assertEqual(
                 allocation_days[self.employee_emp][self.holidays_type_2][allocation_4days][f'{primary_unit}_leaves_taken'],

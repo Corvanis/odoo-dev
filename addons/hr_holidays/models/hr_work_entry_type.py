@@ -538,7 +538,7 @@ been taken for this time off type. Changing it now would affect existing employe
                         'holds_changes': False,
                         'total_virtual_excess': 0,
                         'virtual_excess_data': {},
-                        'exceeding_duration': extra_data[employee][work_entry_type]['exceeding_duration'],
+                        'future_accrual_exceeding_duration': extra_data[employee][work_entry_type]['future_accrual_exceeding_duration'],
                         'request_unit': work_entry_type.request_unit,
                         'unit_of_measure': work_entry_type.unit_of_measure,
                         'allows_negative': work_entry_type.allows_negative,
@@ -568,7 +568,7 @@ been taken for this time off type. Changing it now would affect existing employe
                 allocations_now = self.env['hr.leave.allocation']
                 allocations_date = self.env['hr.leave.allocation']
                 allocations_with_remaining_leaves = self.env['hr.leave.allocation']
-                primary_unit = 'hours' if work_entry_type.unit_of_measure == 'hour' else 'days'
+                primary_unit = 'hour' if work_entry_type.unit_of_measure == 'hour' else 'day'
                 for allocation, data in allocations_leaves_consumed[employee][work_entry_type].items():
                     # We only need the allocation that are valid at the given date
                     if allocation:
@@ -586,6 +586,7 @@ been taken for this time off type. Changing it now would affect existing employe
                             continue
                         if same_year_only and allocation.date_from.year != target_date.year:
                             continue
+                    print(f'Added rem leaves: {data[f'{primary_unit}_remaining_leaves']}')
                     lt_info[1]['remaining_leaves'] += data[f'{primary_unit}_remaining_leaves']
                     lt_info[1]['virtual_remaining_leaves'] += data[f'{primary_unit}_virtual_remaining_leaves']
                     lt_info[1]['max_leaves'] += data[f'{primary_unit}_max_leaves']
