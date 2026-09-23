@@ -28,8 +28,10 @@
         background-color: var(--KanbanColumn__highlight-selected);
     }
 
-    .o_dropdown_kanban .btn {
-        border-radius: calc(#{$border-radius-lg} - #{map-get($spacers, 1)});
+    .o_dropdown_kanban {
+        &.o_floating_dropdown_kanban {
+            margin: var(--Card-padding-v) var(--Card-padding-h) 0 0;
+        }
     }
 
     .o_field_many2many_tags_avatar {
