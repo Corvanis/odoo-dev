@@ -5,7 +5,7 @@
 
     .o_calendar_widget .fc-timeGridDay-view,
     .o_calendar_widget .fc-timeGridWeek-view {
-        .fc-timegrid-divider.fc-cell-shaded:after {
+        .fc-timegrid-divider:after {
             --fc-timegrid-divider-size: 25px;
             --fc-timegrid-divider-background: linear-gradient(0deg, #{rgba($white, 0)}, #{rgba($white, .25)});
         }
