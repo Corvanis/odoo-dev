@@ -6,11 +6,11 @@ import requests
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools.translate import mark_as_copy
 
 from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.const import REPORT_REASONS_MAPPING, SENSITIVE_KEYS
 from odoo.addons.payment.logging import get_payment_logger
-from odoo.tools.translate import mark_as_copy
 
 # Pass the possibly empty set of sensitive keys to the logger in case a provider module extends it.
 _logger = get_payment_logger(__name__, sensitive_keys=SENSITIVE_KEYS)
@@ -555,7 +555,7 @@ class PaymentProvider(models.Model):
         vals_list = super().copy_data(default=default)
         if "name" not in default and "company_id" not in default:
             for provider, vals in zip(self, vals_list):
-                vals["name"] = mark_as_copy('name')(provider)
+                vals["name"] = mark_as_copy("name")(provider)
         return vals_list
 
     @api.ondelete(at_uninstall=False)
@@ -805,6 +805,7 @@ class PaymentProvider(models.Model):
         self,
         partner_id,
         *,
+        billing_partner_id=None,
         currency_id=None,
         force_tokenization=False,
         is_express_checkout=False,
@@ -814,6 +815,8 @@ class PaymentProvider(models.Model):
         """Find the providers' payment methods available for the given payment context.
 
         :param int partner_id: The partner making the payment, as a `res.partner` id
+        :param int billing_partner_id: The billing address of the document being paid, as a
+                                       `res.partner` id
         :param int currency_id: The payment currency, as a `res.currency` id
         :param bool force_tokenization: Whether payment methods must support tokenization
         :param bool is_express_checkout: Whether payment methods must support express checkout
@@ -839,6 +842,18 @@ class PaymentProvider(models.Model):
                 unfiltered_pms - payment_methods,
                 available=False,
                 reason=REPORT_REASONS_MAPPING["incompatible_country"],
+            )
+
+        # Handle the billing address requirement
+        billing_partner = self.env["res.partner"].browse(billing_partner_id).exists()
+        if not billing_partner or not billing_partner._check_billing_address():
+            unfiltered_pms = payment_methods
+            payment_methods = payment_methods.filtered(lambda pm: not pm.require_billing_address)
+            payment_utils.add_to_report(
+                report,
+                unfiltered_pms - payment_methods,
+                available=False,
+                reason=REPORT_REASONS_MAPPING["missing_billing_address"],
             )
 
         # Handle the supported currencies; allow all currencies if the list is empty
