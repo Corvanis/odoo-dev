@@ -88,13 +88,14 @@
                       reloadFunc="props.onReloadData"
                       resId="record.resId" resModel="record.resModel"
                       userAssignedIds="activityGroup.user_assigned_ids"
+                      canCreate="props.archInfo.activeActions.create"
         />
     </td>
     <td t-else=""
         class="o_activity_summary_cell o_activity_empty_cell cursor-pointer"
         t-attf-class="{{ activeFilter.resIds.has(resId) ? 'o_activity_filter_' + activeFilter.progressValue.active : '' }}"
-        t-on-click.prevent.stop="() => props.onEmptyCell(resId, type.id)">
-        <i data-tooltip="Create" class="text-center fa fa-plus mt-2 align-items-center justify-content-center h-100"/>
+        t-on-click.prevent.stop="() => props.archInfo.activeActions.create ? props.onEmptyCell(resId, type.id) : false">
+        <i data-tooltip="Create" class="text-center fa fa-plus mt-2 align-items-center justify-content-center h-100" t-att-class="{ 'text-muted': !props.archInfo.activeActions.create }"/>
     </td>
 </t>
 
@@ -102,7 +103,7 @@
     <tfoot class="o_activity_view_table_footer">
         <tr class="o_data_row">
             <td class="p-3" colspan="100">
-                <span class="btn btn-link o_record_selector cursor-pointer"
+                <span t-if="props.archInfo.activeActions.create" class="btn btn-link o_record_selector cursor-pointer"
                       t-on-click.prevent.stop="props.scheduleActivity">
                     <i class="fa fa-plus pe-2"/> Schedule activity
                 </span>
