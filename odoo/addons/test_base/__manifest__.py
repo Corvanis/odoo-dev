@@ -3,6 +3,11 @@
     'category': 'Hidden/Tests',
     'description': """A module to test the ORM.""",
     'depends': ['base'],
+    'external_dependencies': [
+        {'pypi': 'num2words', 'test': True},
+        {'pypi': 'asn1crypto', 'test': True},
+        {'pypi': 'psutil', 'test': True},
+    ],
     'data': [
         'data/test_translated_field/test_model_data.xml',
         'data/test_access_rights_data.xml',

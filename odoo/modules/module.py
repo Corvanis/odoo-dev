@@ -76,7 +76,7 @@ _DEFAULT_MANIFEST = {
     'demo': [],
     'depends': [],
     'description': '',  # defaults to README file
-    'external_dependencies': {},
+    'external_dependencies': [],
     'iap_paid_service': False,
     'installable': True,
     'images': [],  # website
@@ -302,18 +302,24 @@ class Manifest(Mapping[str, typing.Any]):
 
         On missing dependencies, raise an error.
         """
-        depends = self.get('external_dependencies')
-        if not depends:
+        external_dependencies = self.get('external_dependencies')
+        if not external_dependencies:
             return
-        for pydep in depends.get('python', []):
-            check_python_external_dependency(pydep)
-
-        for binary in depends.get('bin', []):
-            try:
-                tools.find_in_path(binary)
-            except OSError:
-                msg = "Unable to find {dependency!r} in path"
-                raise MissingDependency(msg, binary)
+        # format: list of {'pypi': ..., 'modules': [...], 'apt': ..., 'optional': bool, 'test': bool}
+        for external_dependency_info in external_dependencies:
+            if external_dependency_info.get('optional') or external_dependency_info.get('test'):
+                continue
+            if 'pypi' in external_dependency_info:
+                check_python_external_dependency(external_dependency_info)
+            elif 'bin' in external_dependency_info:
+                binary = external_dependency_info['bin']
+                try:
+                    tools.find_in_path(binary)
+                except OSError:
+                    msg = "Unable to find {dependency!r} in path"
+                    raise MissingDependency(msg, external_dependency_info)
+            else:
+                _logger.warning('Unexpected dependency %s', external_dependency_info)
 
     def __bool__(self):
         return True
@@ -501,6 +507,27 @@ def _load_manifest(module: str, manifest_content: dict) -> dict:
         _logger.warning("The module %s has an incompatible version, setting installable=False", module)
         manifest['installable'] = False
 
+    # TODO remove in 21.1
+    external_dependencies = manifest['external_dependencies']
+    if isinstance(external_dependencies, dict):
+        _logger.warning("External dependencies of %s should be migrated to the new format", module)
+        apt_mapping = external_dependencies.get('apt', {})
+        new_external_dependencies = []
+        for key, values in external_dependencies.items():
+            if key == 'python':
+                new_key = 'pypi'
+            elif key == 'bin':
+                new_key = 'bin'
+            else:
+                continue
+            for package in values:
+                new_external_dependency = {new_key: package}
+                if apt := apt_mapping.get(package):
+                    new_external_dependency['apt'] = apt
+                new_external_dependencies.append(new_external_dependency)
+        manifest['external_dependencies'] = new_external_dependencies
+        _logger.info('Converted new format: %s', new_external_dependencies)
+
     return manifest
 
 
@@ -614,7 +641,8 @@ class MissingDependency(Exception):
         super().__init__(msg_template.format(dependency=dependency))
 
 
-def check_python_external_dependency(pydep: str) -> None:
+def check_python_external_dependency(dep: dict) -> None:
+    pydep = dep['pypi']
     try:
         requirement = Requirement(pydep)
     except InvalidRequirement as e:
@@ -637,10 +665,10 @@ def check_python_external_dependency(pydep: str) -> None:
         except ImportError:
             pass
         msg = "External dependency {dependency!r} not installed: %s" % (e,)
-        raise MissingDependency(msg, pydep) from e
+        raise MissingDependency(msg, dep) from e
     if requirement.specifier and not requirement.specifier.contains(version):
         msg = f"External dependency version mismatch: {{dependency}} (installed: {version})"
-        raise MissingDependency(msg, pydep)
+        raise MissingDependency(msg, dep)
 
 
 def load_script(path: str, module_name: str):

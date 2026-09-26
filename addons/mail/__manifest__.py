@@ -60,6 +60,10 @@ For more specific needs, you may also assign custom-defined actions
     """,
     'website': 'https://www.odoo.com/app/discuss',
     'depends': ['base', 'base_setup', 'bus', 'web_tour', 'html_editor'],
+    'external_dependencies': [
+        {'pypi': 'chardet'},
+        {'pypi': 'markdown2', 'optional': True},
+    ],
     'data': [
         'data/mail_groups.xml',
         'wizard/mail_activity_schedule_views.xml',

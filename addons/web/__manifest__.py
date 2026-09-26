@@ -10,6 +10,11 @@ Odoo Web core module.
 This module provides the core of the Odoo Web Client.
 """,
     'depends': ['base'],
+    'external_dependencies': [
+        {'pypi': 'geoip2', 'apt': 'python3-geoip2', 'core': True},
+        {'pypi': 'vobject', 'optional': 'True'},
+        {'pypi': 'XlsxWriter', 'modules': ['xlsxwriter']},  # 'optional': 'True'  # TODO SHOULD BE OPTIONAL but not detected as optional by odools
+    ],
     'auto_install': True,
     'data': [
         'views/webclient_templates.xml',
