@@ -194,7 +194,7 @@
             }
         }
 
-        &.fc-event-mirror, &.fc-dragging {
+        &.fc-event-mirror, &.fc-event-dragging {
             --o-bg-opacity: .25;
             border-color: rgba($o-action, .5);
 
@@ -216,7 +216,7 @@
             background-color: rgba($o-view-background-color, var(--o-overlay-opacity));
         }
 
-        &:not(.o_event_dot):not(.fc-dragging).o_cw_custom_highlight {
+        &:not(.o_event_dot):not(.fc-event-dragging).o_cw_custom_highlight {
             box-shadow: 0px 8px 8px -7px rgba(0, 0, 0, 0.2);
             z-index: 2; /* for the shadow to go over the events below */
         }
@@ -295,20 +295,6 @@
         --fc-page-bg-color: #{$o-view-background-color};
         --fc-border-color: var(--o-cw-border-color);
         --fc-non-business-color: #{rgba($o-gray-300, .5)};
-
-        .fc-body > tr > .fc-widget-content {
-            border-top: 0;
-        }
-
-        .fc-widget-content, .fc-widget-header {
-            border-bottom: 0;
-        }
-
-        hr.fc-widget-header {
-            padding: 1px;
-            border: 0;
-            background: map-get($grays, "400");
-        }
 
         .fc-view {
             border-right: $border-width solid var(--fc-border-color);
@@ -749,7 +735,7 @@
 }
 
 .o_calendar_renderer .fc-view {
-    .fc-event:not(.o_event_dot):not(.fc-dragging) {
+    .fc-event:not(.o_event_dot):not(.fc-event-dragging) {
         &.o_cw_custom_highlight, &.o_calendar_popover_open {
             box-shadow: 0px 8px 2px -7px rgba(0, 0, 0, 0.5);
             z-index: 2; /* for the shadow to go over the events below */
@@ -793,7 +779,7 @@
                     transparent 55% 100%);
             }
 
-            &.fc-event:not(.o_event_dot):not(.fc-dragging) {
+            &.fc-event:not(.o_event_dot):not(.fc-event-dragging) {
                 --fc-event-text-color: #{color-contrast($color-subtle)};
                 --fc-event-border-color: #{tint-color($color, 50%)};
             }
@@ -821,6 +807,11 @@
             }
         }
     }
+}
+
+.o_calendar_renderer .o_calendar_color_custom {
+    --fc-event-bg-color: var(--fc-event-color);
+    --fc-bg-event-color: var(--fc-event-color);
 }
 
 .fc-day.o-highlight {
