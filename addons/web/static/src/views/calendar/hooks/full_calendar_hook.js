@@ -1,4 +1,12 @@
-import { onMounted, onPatched, onWillStart, onWillUnmount, signal, useProps } from "@odoo/owl";
+import {
+    onMounted,
+    onPatched,
+    onWillStart,
+    onWillUnmount,
+    signal,
+    useListener,
+    useProps,
+} from "@odoo/owl";
 import { loadBundle } from "@web/core/assets";
 import { withCompatOptions } from "@web/views/calendar/hooks/full_calendar_compat";
 
@@ -28,6 +36,20 @@ export function useFullCalendar(ref, params) {
         }
     });
     onWillUnmount(() => instance().destroy());
+
+    // FullCalendar measures its grid once per interaction, a resize meanwhile (e.g. the tablet
+    // browser toolbar showing up while scrolling) makes its hit detection read past the last row.
+    useListener(ref, "pointerdown", () => {
+        const el = ref();
+        el.style.minHeight = el.style.maxHeight = `${el.getBoundingClientRect().height}px`;
+        const controller = new AbortController();
+        const unlock = () => {
+            el.style.minHeight = el.style.maxHeight = "";
+            controller.abort();
+        };
+        window.addEventListener("pointerup", unlock, { signal: controller.signal });
+        window.addEventListener("pointercancel", unlock, { signal: controller.signal });
+    });
 
     return instance;
 }
