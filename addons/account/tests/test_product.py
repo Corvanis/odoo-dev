@@ -141,3 +141,32 @@ class TestProduct(AccountTestInvoicingCommon):
         self.assertFalse(Product._retrieve_product(name='Wireless bluetooth speaker'))
         self.assertEqual(product_A, Product._retrieve_product(name='Network Cable'))
         self.assertEqual(product_A, Product._retrieve_product(name='network cables'))  # case insensitive exact match
+
+    def test_get_product_accounts_during_demo_loading(self):
+        old_account, new_account = self.env['account.account'].create([{
+            'name': f'Income Account{i}',
+            'code': f'INC00{i}',
+            'account_type': 'income',
+            'company_ids': [self.env.company.id],
+        } for i in range(1, 3)])
+
+        category = self.env['product.category'].create({
+            'name': 'Test Category',
+            'property_account_income_categ_id': old_account.id,
+        })
+        product = self.env['product.product'].create({
+            'name': 'Test Product',
+            'categ_id': category.id,
+        })
+
+        accounts = product.product_tmpl_id.with_context(install_demo=True)._get_product_accounts()
+        self.assertEqual(accounts['income'], old_account)
+
+        # Replace the account and delete the old one.
+        category.property_account_income_categ_id = new_account
+        old_account.unlink()
+
+        accounts = product.product_tmpl_id.with_context(install_demo=True)._get_product_accounts()
+
+        self.assertEqual(accounts['income'], new_account)
+        self.assertTrue(accounts['income'].exists())

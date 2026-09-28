@@ -128,13 +128,13 @@ class ProductTemplate(models.Model):
         # within the same transaction.
         cache = self.env.cr.cache.setdefault('account_product_accounts', {})
         key = (self.id, self.env.company.id)
-        if key in cache:
+        if key in cache and not self.env.context.get('install_demo'):
             # Copy: some overrides mutate the returned dict in place (e.g. `mrp_account`, `l10n_de`).
             return dict(cache[key])
 
         stock_valuation = self._get_category_account('property_stock_valuation_account_id')\
             or (self.company_id or self.env.company).account_stock_valuation_id
-        cache[key] = {
+        accounts = {
             'income': (
                 self.property_account_income_id
                 or self._get_category_account('property_account_income_categ_id', 'income_account_id')
@@ -145,7 +145,11 @@ class ProductTemplate(models.Model):
             ), 'stock_valuation': stock_valuation,
             'stock_variation': stock_valuation.account_stock_variation_id,
         }
-        return dict(cache[key])
+
+        if not self.env.context.get("install_demo"):
+            cache[key] = accounts
+
+        return dict(accounts)
 
     def _get_category_account(self, field_name, company_field=None):
         """
