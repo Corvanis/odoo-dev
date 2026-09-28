@@ -186,7 +186,7 @@ class StockValuationReport(models.AbstractModel):
             type_valuation_amount_by_account = defaultdict(float)
             for vals in main_counterpart_vals_list:
                 amount = vals['debit'] - vals['credit']
-                if company.currency_id.is_zero(amount):
+                if company.currency_id.is_zero(amount) or not vals.get('account_id'):
                     continue
                 account = self.env['account.account'].browse(vals['account_id'])
                 type_valuation_amount_by_account[account] += amount
