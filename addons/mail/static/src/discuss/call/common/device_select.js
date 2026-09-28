@@ -29,7 +29,6 @@ export class DeviceSelect extends Component {
                 .optional(),
         });
         this.store = useService("mail.store");
-        this.notification = useService("notification");
         /** @type {import("@odoo/owl").Signal<Element>} */
         this.rootRef = signal();
         this.userDevices = signal.Array([], { type: t.instanceOf(MediaDeviceInfo) });
@@ -41,15 +40,6 @@ export class DeviceSelect extends Component {
         this.abortController = new AbortController();
         this.isBrowserChrome = isBrowserChrome();
         onWillStart(() => {
-            if (!browser.navigator.mediaDevices) {
-                // zxing-js: isMediaDevicesSuported or canEnumerateDevices is false.
-                this.notification.add(
-                    _t("Media devices unobtainable. SSL might not be set up properly."),
-                    { type: "warning" }
-                );
-                console.warn("Media devices unobtainable. SSL might not be set up properly.");
-                return;
-            }
             this.updateDevicesList();
             this.setupEventListeners();
         });
