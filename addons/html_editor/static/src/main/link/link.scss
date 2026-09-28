@@ -23,7 +23,9 @@
     span[class$="-fs"],
     span.small,
     span[style*="font-size"] {
-        .btn:not(:has(span[class$="-fs"], span.small, span[style*="font-size"])) {
+        // Class set by the LinkPlugin: an equivalent `:has()` on class/style
+        // attributes makes Chrome restyle the whole page on every such change.
+        .btn:not(.o_btn_with_font_size) {
             font-family: unset;
             font-size: unset;
         }
