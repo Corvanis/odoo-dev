@@ -18,9 +18,6 @@
                                 </div>
                             </div>
                         </setting>
-                        <setting string="Variant Grid Entry" help="Add several variants to an order from a grid" id="product_matrix">
-                            <field name="module_sale_product_matrix"/>
-                        </setting>
                         <setting id="uom_settings" help="Sell and purchase products in different units of measure or packagings">
                             <field name="group_uom"/>
                             <div class="content-group" invisible="not group_uom">
@@ -31,9 +28,6 @@
                         </setting>
                     </block>
                     <block title="Pricing" id="pricing_setting_container">
-                      <setting id="discount_sale_order_lines" title="Apply manual discounts on sales order lines or display discounts computed from pricelists (option to activate in the pricelist configuration)." help="Grant discounts on sales order lines">
-                            <field name="group_discount_per_so_line"/>
-                       </setting>
                         <setting id="coupon_settings" title="Boost your sales with multiple kinds of programs: Coupons, Promotions, Gift Card, Loyalty. Specific conditions can be set (products, customers, minimum purchase amount, period). Rewards can be discounts (% or amount) or free products." string="Promotions, Loyalty &amp; Gift Card" help="Manage Promotions, Coupons, Loyalty cards, Gift cards &amp; eWallet">
                             <field name="module_loyalty"/>
                         </setting>
@@ -50,17 +44,6 @@
                         </setting>
                     </block>
                     <block title="Quotations &amp; Orders" name="quotation_order_setting_container">
-                        <setting
-                            id="sale_order_mandatory_product"
-                            help="Prevent selling without a linked product"
-                        >
-                            <field name="sale_order_mandatory_product"/>
-                        </setting>
-                        <setting id="online_signature" company_dependent="1"
-                                 documentation="/applications/sales/sales/send_quotations/get_signature_to_validate.html"
-                                 help="Request customers to sign quotations to validate orders. The default can be changed per order or template.">
-                            <field name="portal_confirmation_sign"/>
-                        </setting>
                         <setting id="online_payment" company_dependent="1"
                                  documentation="/applications/sales/sales/send_quotations/get_paid_to_validate.html"
                                  help="Request a payment to confirm orders, in full (100%) or partial. The default can be changed per order or template.">
@@ -132,7 +115,7 @@
                         </setting>
                         <setting id="quotation_validity_days">
                             <div title="Days between quotation proposal and expiration. 0 days means automatic expiration is disabled">
-                                <label for="quotation_validity_days"/>
+                                <label for="quotation_validity_days" string="Quotation Validity"/>
                                 <field name="quotation_validity_days" class="text-center" style="width: 3rem;"/>
                                 <div class="d-inline-block">days</div>
                                 <span class="oi oi-lg p-2" data-icon="business"
@@ -143,8 +126,16 @@
                                 Default period during which the quote is valid and can still be accepted by the customer. The default can be changed per order or template.
                             </div>
                         </setting>
-                        <setting id="order_warnings" string="Sale Warnings" help="Get warnings in orders for products or customers">
-                            <field name="group_warning_sale"/>
+                        <setting
+                            id="sale_order_mandatory_product"
+                            help="Prevent selling without a linked product"
+                        >
+                            <field name="sale_order_mandatory_product"/>
+                        </setting>
+                        <setting id="online_signature" company_dependent="1"
+                                 documentation="/applications/sales/sales/send_quotations/get_signature_to_validate.html"
+                                 help="Request customers to sign quotations to validate orders. The default can be changed per order or template.">
+                            <field name="portal_confirmation_sign"/>
                         </setting>
                         <setting id="sale_pdf_quote_builder" string="PDF Quote builder" help="Make your quote attractive by adding header pages, product descriptions and footer pages to your quote.">
                             <field name="module_sale_pdf_quote_builder"/>
@@ -158,7 +149,7 @@
                         </setting>
                         <setting
                             id="display_product_images_on_so"
-                            string="Display Product Images"
+                            string="Product Images"
                             help="Show product images on your PDF and online quotes."
                             company_dependent="1"
                         >
@@ -223,9 +214,6 @@
                                 name="gelato_credentials"
                                 invisible="not module_sale_gelato"
                             />
-                        </setting>
-                        <setting id="shopee_connector" help="Import Shopee orders and sync deliveries">
-                            <field name="module_sale_shopee" widget="upgrade_boolean"/>
                         </setting>
                     </block>
                 </app>
