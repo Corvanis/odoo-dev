@@ -4,11 +4,20 @@ import { useAttachmentUploader } from "@mail/core/common/attachment_uploader_hoo
 import { useCustomDropzone } from "@web/core/dropzone/dropzone_hook";
 import { MailAttachmentDropzone } from "@mail/core/common/mail_attachment_dropzone";
 import { NavigableList } from "@mail/core/common/navigable_list";
-import { MAIL_PLUGINS, MAIL_SMALL_UI_PLUGINS } from "@mail/core/common/plugin/plugin_sets";
+import {
+    MAIL_HTML_PLUGINS,
+    MAIL_HTML_PLUGINS_SMALL_UI,
+    MAIL_TEXT_PLUGINS,
+} from "@mail/core/common/plugin/plugin_sets";
 import { mapSuggestionsToOptions, useSuggestion } from "@mail/core/common/suggestion_hook";
 import { groupAttachments } from "@mail/utils/common/attachments";
-import { propComputed, useSelection, useVisible } from "@mail/utils/common/hooks";
-import { generatePartnerMentionElement, trimEmptyBlocksAround } from "@mail/utils/common/format";
+import { propComputed, useVisible } from "@mail/utils/common/hooks";
+import {
+    addLink,
+    generatePartnerMentionElement,
+    parseAndTransform,
+    trimEmptyBlocksAround,
+} from "@mail/utils/common/format";
 import { getInnerHtml } from "@mail/utils/common/html";
 import { isDragSourceExternalFile } from "@mail/utils/common/misc";
 import { Wysiwyg } from "@html_editor/wysiwyg";
@@ -34,6 +43,7 @@ import {
     untrack,
     useApp,
     useListener,
+    useOnChange,
     usePlugin,
     useProps,
 } from "@odoo/owl";
@@ -60,8 +70,8 @@ import { Dropdown } from "@web/core/dropdown/dropdown";
 import { DropdownItem } from "@web/core/dropdown/dropdown_item";
 import { useComposerActions } from "@mail/core/common/composer_actions";
 import { ActionList } from "@mail/core/common/action_list";
-import { closestElement, lastLeaf } from "@html_editor/utils/dom_traversal";
-import { rightPos } from "@html_editor/utils/position";
+import { childNodes, closestElement, lastLeaf } from "@html_editor/utils/dom_traversal";
+import { nodeSize, rightPos } from "@html_editor/utils/position";
 import { syntaxHighlightingEmbedding } from "@html_editor/others/embedded_components/backend/syntax_highlighting/syntax_highlighting";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { usePopover } from "@web/core/popover/popover_hook";
@@ -76,6 +86,34 @@ export const COMPOSER_TYPES = {
     NOTE: "note",
     MESSAGE: "message",
 };
+
+/**
+ * @param {Node} root
+ * @param {Node} node
+ * @returns {number[]|undefined} indexes of the successive children leading from
+ *  `root` to `node`, undefined if `node` is not inside `root`
+ */
+function getNodePath(root, node) {
+    const path = [];
+    while (node && node !== root) {
+        path.unshift(childNodes(node.parentNode).indexOf(node));
+        node = node.parentNode;
+    }
+    return node === root ? path : undefined;
+}
+
+/**
+ * @param {Node} root
+ * @param {number[]} path
+ * @returns {Node|undefined}
+ */
+function getNodeFromPath(root, path) {
+    let node = root;
+    for (const index of path) {
+        node = node?.childNodes[index];
+    }
+    return node;
+}
 class FullComposerRecoveryPopover extends Component {
     static template = "mail.FullComposerRecoveryPopover";
 
@@ -159,8 +197,6 @@ export class Composer extends Component {
         );
         this.ui = useService("ui");
         this.composerService = useService("mail.composer");
-        this.ref = signal.ref(HTMLTextAreaElement);
-        this.fakeTextarea = signal.ref(HTMLTextAreaElement);
         this.inputContainerRef = signal.ref(HTMLSpanElement);
         this.pickerContainerRef = signal.ref(HTMLDivElement);
         this.state = proxy({
@@ -177,23 +213,6 @@ export class Composer extends Component {
                 "dropdown-menu o-dropdown--menu bg-view overflow-visible o-rounded-bubble mx-1",
         });
         this.fullComposerBus = new EventBus();
-        this.selection = useSelection({
-            ref: this.ref,
-            model: this.props.composer.selection,
-            preserveOnClickAwayPredicate: async (ev) => {
-                // Let event be handled by bubbling handlers first.
-                await new Promise(setTimeout);
-                return (
-                    !this.isEventTrusted(ev) ||
-                    isEventHandled(ev, "sidebar.openChannel") ||
-                    isEventHandled(ev, "emoji.selectEmoji") ||
-                    isEventHandled(ev, "Composer.onClickAddEmoji") ||
-                    isEventHandled(ev, "composer.clickOnAddAttachment") ||
-                    isEventHandled(ev, "composer.selectSuggestion") ||
-                    isEventHandled(ev, "composer.clickInsertCannedResponse")
-                );
-            },
-        });
         this.suggestion = useSuggestion(
             this.env,
             computed(() => this.editor)
@@ -247,20 +266,21 @@ export class Composer extends Component {
         useLayoutEffect(
             () => {
                 const focus = this.props.autofocus + this.props.composer.autofocus;
-                if (focus && this.ref()) {
-                    this.selection.restore();
-                    this.ref().focus();
-                }
                 if (focus && this.editor?.editable) {
                     this.editor.shared.selection.focusEditable();
                     this.editor.shared.selection.selectAroundNonEditable();
                 }
             },
-            () => [
-                this.props.autofocus + this.props.composer.autofocus,
-                this.props.placeholder,
-                untrack(this.ref),
-            ]
+            () => [this.props.autofocus + this.props.composer.autofocus, this.props.placeholder]
+        );
+        this.isEditorReady = signal(false);
+        useOnChange(
+            () => [this.isEditorReady(), this.isEditorReadonly, this.isEditorDisabled],
+            (isEditorReady) => {
+                if (isEditorReady) {
+                    this.updateEditableState();
+                }
+            }
         );
         useLayoutEffect(
             () => {
@@ -272,31 +292,9 @@ export class Composer extends Component {
         );
         useLayoutEffect(
             () => {
-                const fakeTextareaEl = this.fakeTextarea();
-                if (fakeTextareaEl?.scrollHeight && this.ref()) {
-                    let wasEmpty = false;
-                    if (!fakeTextareaEl.value) {
-                        wasEmpty = true;
-                        fakeTextareaEl.value = "0";
-                    }
-                    this.ref().style.height = fakeTextareaEl.scrollHeight + "px";
-                    if (wasEmpty) {
-                        fakeTextareaEl.value = "";
-                    }
-                }
                 this.saveContentDebounced();
             },
-            () => [this.props.composer.composerText, untrack(this.ref)]
-        );
-        useLayoutEffect(
-            () => {
-                if (!this.props.composer.forceCursorMove) {
-                    return;
-                }
-                this.selection.restore();
-                this.props.composer.forceCursorMove = false;
-            },
-            () => [this.props.composer.forceCursorMove]
+            () => [this.props.composer.composerText]
         );
         useLayoutEffect(
             () => {
@@ -364,7 +362,6 @@ export class Composer extends Component {
             ]
         );
         onMounted(() => {
-            this.ref()?.scrollTo({ top: 0, behavior: "instant" });
             if (!this.props.composer.composerText) {
                 this.restoreContent();
             }
@@ -404,6 +401,69 @@ export class Composer extends Component {
             this.editor.shared.selection.setCursorEnd(lastNode);
         }
         this.editor.shared.selection.selectAroundNonEditable();
+    }
+
+    /**
+     * Saves the selection on the composer, so that it can be restored when the
+     * editor is re-created with the same content (e.g. when switching thread).
+     *
+     * @param {import("@html_editor/core/selection_plugin").EditorSelection} selection
+     */
+    saveEditorSelection({ anchorNode, anchorOffset, focusNode, focusOffset }) {
+        const anchorPath = getNodePath(this.editor.editable, anchorNode);
+        const focusPath = getNodePath(this.editor.editable, focusNode);
+        if (!anchorPath || !focusPath) {
+            return;
+        }
+        this.props.composer.editorSelection = {
+            anchorPath,
+            anchorOffset,
+            focusPath,
+            focusOffset,
+            composerHtml: this.props.composer.composerHtml.toString(),
+        };
+    }
+
+    /**
+     * @returns {boolean} whether the saved selection could be restored
+     */
+    restoreEditorSelection() {
+        const savedSelection = this.props.composer.editorSelection;
+        if (savedSelection?.composerHtml !== this.props.composer.composerHtml.toString()) {
+            return false;
+        }
+        const anchorNode = getNodeFromPath(this.editor.editable, savedSelection.anchorPath);
+        const focusNode = getNodeFromPath(this.editor.editable, savedSelection.focusPath);
+        if (
+            !anchorNode ||
+            !focusNode ||
+            savedSelection.anchorOffset > nodeSize(anchorNode) ||
+            savedSelection.focusOffset > nodeSize(focusNode)
+        ) {
+            return false;
+        }
+        this.editor.shared.selection.setSelection({
+            anchorNode,
+            anchorOffset: savedSelection.anchorOffset,
+            focusNode,
+            focusOffset: savedSelection.focusOffset,
+        });
+        return true;
+    }
+
+    updateEditableState() {
+        this.editor.editable.toggleAttribute("readonly", this.isEditorReadonly);
+        this.editor.editable.setAttribute("contenteditable", !this.isEditorDisabled);
+    }
+
+    /** Whether the content can't be sent, e.g. while a message is being posted. */
+    get isEditorReadonly() {
+        return !this.state.active || this.props.composer.restoredFromFullComposer;
+    }
+
+    /** Whether the content can't be edited at all. */
+    get isEditorDisabled() {
+        return this.props.disabled;
     }
 
     get areAllActionsDisabled() {
@@ -466,7 +526,11 @@ export class Composer extends Component {
             content: this.props.composer.composerHtml,
             placeholder: this.placeholder,
             baseContainers: ["DIV", "P"],
-            Plugins: this.ui.isSmall ? MAIL_SMALL_UI_PLUGINS : MAIL_PLUGINS,
+            Plugins: !this.composerService.htmlEnabled
+                ? MAIL_TEXT_PLUGINS
+                : this.ui.isSmall
+                ? MAIL_HTML_PLUGINS_SMALL_UI
+                : MAIL_HTML_PLUGINS,
             composerPluginDependencies: {
                 onBeforePaste: (selection, ev) => this.onPaste(ev),
                 onFocusin: this.onFocusin.bind(this),
@@ -477,12 +541,30 @@ export class Composer extends Component {
             embeddedComponentInfo: { app: this.app, env: this.env },
             resources: {
                 embedded_components: [syntaxHighlightingEmbedding],
+                on_selectionchange_handlers: ({
+                    editableSelection,
+                    documentSelectionIsInEditable,
+                }) => {
+                    // Outside of the editable (e.g. the editor being removed), the editable
+                    // selection may be reset: keep the last one set by the user.
+                    if (documentSelectionIsInEditable) {
+                        this.saveEditorSelection(editableSelection);
+                    }
+                },
             },
-            classList: ["o-mail-Composer-html", "min-w-0"],
+            classList: [
+                "o-mail-Composer-html",
+                "min-w-0",
+                ...(this.isMobileOS ? ["o-mobile"] : []),
+            ],
             onChange: () => this.onChangeWysiwygContent(),
             onEditorReady: () => {
-                this.setEditorCursorEnd();
+                if (!this.restoreEditorSelection()) {
+                    this.setEditorCursorEnd();
+                }
                 this.editor.shared.history.commit();
+                this.updateEditableState();
+                this.isEditorReady.set(true);
             },
         };
     }
@@ -603,10 +685,7 @@ export class Composer extends Component {
         const props = {
             anchorRef: this.inputContainerRef,
             position: this.env.inChatter ? "bottom-fit" : "top-fit",
-            onSelect: (ev, option) => {
-                this.suggestion.insert(option);
-                markEventHandled(ev, "composer.selectSuggestion");
-            },
+            onSelect: (ev, option) => this.suggestion.insert(option),
             isLoading: !!searchTerm && loading,
             options: [],
             rememberPosition: false,
@@ -872,11 +951,6 @@ export class Composer extends Component {
         this.deleteSavedContent();
     }
 
-    isEventTrusted(ev) {
-        // Allow patching during tests
-        return ev.isTrusted;
-    }
-
     async processMessage(cb) {
         if (this.props.composer.attachments.some(({ uploading }) => uploading)) {
             this.notification.add(_t("Please wait while the file is uploading."), {
@@ -887,13 +961,15 @@ export class Composer extends Component {
                 return;
             }
             this.state.active = false;
-            await cb(trimEmptyBlocksAround(this.props.composer.composerHtml));
+            // Links are only styled while typing (VisualLinkPlugin): linkify them on post.
+            await cb(
+                parseAndTransform(trimEmptyBlocksAround(this.props.composer.composerHtml), addLink)
+            );
             if (this.props.onPostCallback) {
                 this.props.onPostCallback();
             }
             this.clear();
             this.state.active = true;
-            this.ref()?.focus();
         }
     }
 
@@ -1035,23 +1111,11 @@ export class Composer extends Component {
 
     onClickInsertCannedResponse(ev) {
         markEventHandled(ev, "composer.clickInsertCannedResponse");
-        if (this.editor) {
-            if (!isHtmlEmpty(this.props.composer.composerHtml)) {
-                this.editor.shared.dom.insert(" ");
-            }
-            this.editor.shared.dom.insert("::");
-            this.editor.shared.history.commit();
-        } else {
-            const composerText = this.props.composer.composerText;
-            const firstPart = composerText.slice(0, this.props.composer.selection.start);
-            const secondPart = composerText.slice(
-                this.props.composer.selection.end,
-                composerText.length
-            );
-            const toInsertPart = firstPart.length === 0 || firstPart.at(-1) === " " ? "::" : " ::";
-            this.props.composer.composerText = firstPart + toInsertPart + secondPart;
-            this.selection.moveCursor((firstPart + toInsertPart).length);
+        if (!isHtmlEmpty(this.props.composer.composerHtml)) {
+            this.editor.shared.dom.insert(" ");
         }
+        this.editor.shared.dom.insert("::");
+        this.editor.shared.history.commit();
         if (!this.ui.isSmall || !this.env.inChatter) {
             this.props.composer.autofocus++;
         }
@@ -1072,19 +1136,8 @@ export class Composer extends Component {
     }
 
     addEmoji(str) {
-        if (this.editor) {
-            this.editor.shared.dom.insert(str);
-            this.editor.shared.history.commit();
-        } else {
-            const composerText = this.props.composer.composerText;
-            const firstPart = composerText.slice(0, this.props.composer.selection.start);
-            const secondPart = composerText.slice(
-                this.props.composer.selection.end,
-                composerText.length
-            );
-            this.props.composer.composerText = firstPart + str + secondPart;
-            this.selection.moveCursor((firstPart + str).length);
-        }
+        this.editor.shared.dom.insert(str);
+        this.editor.shared.history.commit();
         if (this.ui.isSmall && !this.env.inChatter) {
             return false;
         } else {
