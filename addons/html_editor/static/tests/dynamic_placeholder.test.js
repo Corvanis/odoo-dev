@@ -26,6 +26,7 @@ class ResUsers extends models.Model {
 }
 
 class OneModel extends models.Model {
+    _name = "one.model";
     name = fields.Char({ string: "The many2one model name" });
 }
 
@@ -106,4 +107,31 @@ test("add many2one dynamic placeholder should take the name by default", async (
         <p data-selection-placeholder=""><br></p>
     `)
     );
+});
+
+test("remove all dynamic placeholder when model changes", async () => {
+    const { editor, el } = await setupEditor(`<div>[hop hop]</div>`, {
+        config: {
+            Plugins: [...MAIN_PLUGINS, ...DYNAMIC_PLACEHOLDER_PLUGINS],
+            dynamicPlaceholderResModel: "some.model",
+        },
+    });
+    await insertText(editor, "/");
+    await contains(".o-we-powerbox .o-we-command-name:contains(/^Dynamic Placeholder$/)").click();
+
+    await contains(".o_model_field_selector_popover_page li[data-name='field'] button").click();
+    await contains(".o_model_field_selector_popover button.btn-primary").click();
+    expect(getContent(el)).toBe(
+        unformat(`
+        <p data-selection-placeholder=""><br></p>
+            <div class="o-paragraph">
+                <t t-out="object.field" model-name="some.model" data-oe-t-inline="true" data-oe-protected="true" contenteditable="false"></t>[]
+            </div>
+        <p data-selection-placeholder=""><br></p>
+    `)
+    );
+
+    editor.shared.dynamicPlaceholder.updateDphDefaultModel("one.model");
+
+    expect("t[t-out]").toHaveCount(0);
 });

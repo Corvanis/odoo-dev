@@ -34,10 +34,12 @@ export class DynamicPlaceholderPlugin extends Plugin {
             commandId: "openDynamicPlaceholder",
         },
         power_buttons: { commandId: "openDynamicPlaceholder" },
+        system_attribute: "model-name",
+        normalize_handlers: this.normalize.bind(this),
     };
+
     setup() {
         this.defaultResModel = this.config.dynamicPlaceholderResModel;
-
         /** @type {import("@html_editor/core/overlay_plugin").Overlay} */
         this.overlay = this.dependencies.overlay.createOverlay(EditorDynamicPlaceholderPopover, {
             hasAutofocus: true,
@@ -45,11 +47,28 @@ export class DynamicPlaceholderPlugin extends Plugin {
         });
     }
 
+    normalize(element) {
+        const fieldPlaceHolder = element.querySelectorAll("t[model-name]");
+        fieldPlaceHolder.forEach((el) => {
+            if (el.getAttribute("model-name") !== this.defaultResModel) {
+                const parent = el.parentElement;
+                el.remove();
+
+                if (parent.innerHTML.trim() === "") {
+                    parent.appendChild(this.document.createElement("br"));
+                }
+            }
+        });
+    }
+
     /**
      * @param {string} resModel
      */
     updateDphDefaultModel(resModel) {
-        this.defaultResModel = resModel;
+        if (this.defaultResModel !== resModel) {
+            this.defaultResModel = resModel;
+            this.removeAllFieldBlock();
+        }
     }
 
     /**
@@ -88,6 +107,7 @@ export class DynamicPlaceholderPlugin extends Plugin {
 
         const t = document.createElement("T");
         t.setAttribute("t-out", dynamicPlaceholder);
+        t.setAttribute("model-name", this.defaultResModel);
         if (defaultValue?.length) {
             t.innerText = defaultValue;
         }
@@ -118,5 +138,19 @@ export class DynamicPlaceholderPlugin extends Plugin {
     onClose() {
         this.overlay.close();
         this.dependencies.selection.focusEditable();
+    }
+
+    removeAllFieldBlock() {
+        const fieldBlock = this.editable.querySelectorAll("t[t-out^='object.']");
+        fieldBlock.forEach((el) => {
+            const parent = el.parentElement;
+            el.remove();
+
+            if (parent.innerHTML.trim() === "") {
+                parent.appendChild(this.document.createElement("br"));
+            }
+        });
+
+        this.dependencies.history.addStep();
     }
 }
