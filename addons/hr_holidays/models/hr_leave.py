@@ -80,6 +80,7 @@ class HrLeave(models.Model):
     _time_rule_span_end_field = 'date_to'
     _time_rule_write_ctx = {
         'skip_time_rules': True,
+        'skip_payroll_issues': True,
         'leave_fast_create': True,
         'leave_skip_date_check': True,
         'leave_skip_state_check': True,
@@ -282,7 +283,7 @@ class HrLeave(models.Model):
 
     time_rule_id = fields.Many2one('hr.time.rule', string="Time Rule", copy=False, index=True)
     source_leave_id = fields.Many2one('hr.leave', string="Source Leave", copy=False, index=True)
-    output_leave_ids = fields.One2many('hr.leave', 'source_leave_id')
+    output_leave_ids = fields.One2many('hr.leave', 'source_leave_id', domain=[('time_rule_id', '!=', False)])
     is_time_rule_trimmed = fields.Boolean(
         string='Trimmed by Time Rule', default=False, copy=False,
         help="Set when a time rule trims this leave's end to sub-day precision. "
@@ -1394,6 +1395,9 @@ class HrLeave(models.Model):
         if self.env.context.get('leave_skip_state_check'):
             return
         for holiday in self:
+            if holiday.source_leave_id or not holiday.active:
+                # engine output child or archived source; not gated by the normal approval flow
+                continue
             if holiday.state in ['validate1', 'validate']:
                 message = _(
                     "To modify an approved time off, make sure you unapprove it first (%(employee)s: %(date_from)s to %(date_to)s).",
@@ -1611,8 +1615,13 @@ class HrLeave(models.Model):
         state_invalidated = 'state' in values and values['state'] != 'validate'
         if validated_leaves and state_invalidated:
             validated_leaves._remove_resource_leave()
-            # Preserve allocation reversal logic from existing codebase
-            self.env['hr.time.rule']._reverse_allocation_credits('hr.leave', validated_leaves.ids)
+            # include output children: in the archive+create arch the alloc log points to
+            # the output child (res_id = child.id), not the archived source.
+            all_ids = set(validated_leaves.ids)
+            all_ids.update(
+                validated_leaves.with_context(active_test=False).mapped('output_leave_ids').ids
+            )
+            self.env['hr.time.rule']._reverse_allocation_credits('hr.leave', all_ids)
 
         employee_id = values.get('employee_id', False)
         if not self.env.context.get('leave_fast_create'):

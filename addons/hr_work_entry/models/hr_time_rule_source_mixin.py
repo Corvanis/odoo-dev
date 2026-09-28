@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from dateutil.relativedelta import relativedelta
 
-from odoo import api, models
+from odoo import api, fields, models
 from odoo.tools.date_utils import sum_intervals
 from odoo.tools.intervals import Intervals
 
@@ -23,6 +23,8 @@ class HrTimeRuleSourceMixin(models.AbstractModel):
     _time_rule_span_start_field = ''       # span start field name
     _time_rule_span_end_field = ''         # span end field name
     _time_rule_write_ctx = {'skip_time_rules': True, 'tracking_disable': True}
+
+    active = fields.Boolean(default=True)
 
     def _apply_record_output(self, rules, excess, deficit, active_iv=None):
         raise NotImplementedError
@@ -45,6 +47,18 @@ class HrTimeRuleSourceMixin(models.AbstractModel):
 
     def _get_source_extra_fields_domain(self):
         return []
+
+    def _undo_time_rules(self):
+        """Delete all engine outputs and restore the original (archived) source records.
+
+        Called by the restore wizard.  The allocation log is cleaned up via its own
+        mechanism so callers must handle that side separately.
+        """
+        outputs = self.with_context(active_test=False).sudo().search(
+            [(self._time_rule_source_field, 'in', self.ids)]
+        )
+        outputs.with_context(skip_time_rules=True).unlink()
+        self.with_context(active_test=False).write({'active': True})
 
     def _get_write_source_extra_source_fields(self):
         return set()

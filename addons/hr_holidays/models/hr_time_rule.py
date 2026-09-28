@@ -239,7 +239,10 @@ class HrTimeRule(models.Model):
         if all_source_ids:
             Leave = self.env['hr.leave'].sudo()
             sources = Leave.with_context(active_test=False).browse(list(all_source_ids))
-            (sources | new_records).with_context(**Leave._time_rule_write_ctx)._create_resource_leave()
+            # only archived (excess) sources lose their RCL; deficit sources stay active and keep theirs
+            sources.filtered(lambda l: not l.active)._remove_resource_leave()
+            if new_records:
+                new_records.with_context(**Leave._time_rule_write_ctx)._create_resource_leave()
 
     @api.model
     def _reverse_allocation_credits(self, source_model, source_ids):

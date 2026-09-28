@@ -101,7 +101,7 @@ class HrAttendance(models.Model):
     # time rule engine output fields
     time_rule_id = fields.Many2one('hr.time.rule', index=True)
     source_attendance_id = fields.Many2one('hr.attendance', index=True)
-    overtime_attendance_ids = fields.One2many('hr.attendance', 'source_attendance_id')
+    overtime_attendance_ids = fields.One2many('hr.attendance', 'source_attendance_id', domain=[('time_rule_id', '!=', False)])
     # set to True on surviving output records when their source is modified or deleted
     source_stale = fields.Boolean(default=False, copy=False, export_string_translation=False)
 

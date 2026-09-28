@@ -7,7 +7,7 @@ from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
 
-@tagged('-at_install', 'post_install', 'work_entry_pipeline')
+@tagged('-at_install', 'post_install', 'work_entry_pipeline', 'time_rule_pipeline')
 class TestTimeRuleAllocationLog(TransactionCase):
     """Allocation log creation, source routing, and reversal for attendance-side rules."""
 
@@ -83,21 +83,19 @@ class TestTimeRuleAllocationLog(TransactionCase):
 
     # log source routing
     def test_log_source_inplace(self):
-        """In-place case: source IS the overtime record -> log must reference the source att."""
+        """Full-excess case: source archived, output child created -> log must reference the output child."""
         self._make_rule()
-        # Saturday: 0h scheduled -> all 4h excess -> in-place (source becomes OT record)
+        # Saturday: 0h scheduled -> all 4h excess -> source archived, output child created
         att = self._make_att(datetime(2022, 12, 10, 8), datetime(2022, 12, 10, 12))
-        att.invalidate_recordset()
 
-        # no child output: source was repurposed in-place
-        self.assertFalse(att.overtime_attendance_ids,
-                         "In-place scenario must not produce child output records")
+        child = att.overtime_attendance_ids
+        self.assertEqual(len(child), 1, "One output child for the fully-excess attendance")
 
         logs = self._logs()
         self.assertEqual(len(logs), 1, "Exactly one log entry expected")
         self.assertEqual(logs.res_model, 'hr.attendance')
-        self.assertEqual(logs.res_id, att.id,
-                         "Log source must point to the (in-place) source record itself")
+        self.assertEqual(logs.res_id, child.id,
+                         "Log source must point to the output child")
         self.assertAlmostEqual(logs.days, 0.5, places=5,
                                msg="4h * 100% / 8h = 0.5 days")
 
@@ -122,17 +120,18 @@ class TestTimeRuleAllocationLog(TransactionCase):
                                msg="3h excess (11h worked - 8h expected) * 100% / 8h = 0.375 days")
 
     def test_log_source_pponly(self):
-        """PP-only rule (no output WET): no child att created -> log references the source."""
+        """PP-only rule (no output WET): output child created with source WET -> log references the child."""
         self._make_rule(work_entry_type_id=False)
-        # Saturday: 0h scheduled -> 4h excess, all pp-only (source annotated, no child)
+        # Saturday: 0h scheduled -> 4h excess. Source archived, output child with same WET created.
         att = self._make_att(datetime(2022, 12, 10, 8), datetime(2022, 12, 10, 12))
-        att.invalidate_recordset()
-        self.assertFalse(att.overtime_attendance_ids, "PP-only must not create child records")
+
+        child = att.overtime_attendance_ids
+        self.assertEqual(len(child), 1, "PP-only rule still creates an output child (source WET kept)")
 
         logs = self._logs()
         self.assertEqual(len(logs), 1)
-        self.assertEqual(logs.res_id, att.id,
-                         "PP-only log source must be the source attendance")
+        self.assertEqual(logs.res_id, child.id,
+                         "PP-only log source must point to the output child")
 
     def test_log_source_acc_displaced(self):
         """Acc-displaced credit: R1 tagged by R2 -> R1's credit log references the SOURCE."""
@@ -207,19 +206,21 @@ class TestTimeRuleAllocationLog(TransactionCase):
 
     # reversal on source delete
     def test_source_unlink_inplace_reverses_allocation(self):
-        """Deleting an in-place source (log against source) reverses its credit."""
+        """Deleting the output child (log against child) reverses its credit."""
         self._make_rule()
-        # Saturday: in-place -> log against source
+        # Saturday: source archived, output child created, log against child
         att = self._make_att(datetime(2022, 12, 10, 8), datetime(2022, 12, 10, 12))
+        child = att.overtime_attendance_ids
+        self.assertEqual(len(child), 1, "Prerequisite: output child must exist")
         alloc = self._alloc()
         self.assertAlmostEqual(alloc.number_of_days, 0.5, places=5,
                                msg="0.5d allocated before delete")
 
-        att.unlink()
+        child.unlink()
 
         alloc.invalidate_recordset()
         self.assertAlmostEqual(alloc.number_of_days, 0.0, places=5,
-                               msg="Deleting in-place source must reverse its allocation credit")
+                               msg="Deleting the output child must reverse its allocation credit")
 
     def test_source_unlink_does_not_reverse_output_logged_credit(self):
         """Deleting the SOURCE leaves output-logged credits intact (outputs remain valid).
@@ -251,22 +252,22 @@ class TestTimeRuleAllocationLog(TransactionCase):
     # reversal on source write
     def test_source_write_reverses_inplace_credit(self):
         self._make_rule()
-        # Saturday (in-place case): all 4h is overtime, no output children created.
-        # Log is against the source itself; source credit = 0.5d.
+        # Saturday: source archived, output child (4h, ot_type) created.
+        # Log is against the output child; child credit = 0.5d.
         att = self._make_att(datetime(2022, 12, 10, 8), datetime(2022, 12, 10, 12))
+        child = att.overtime_attendance_ids
+        self.assertEqual(len(child), 1, "Prerequisite: output child must exist")
         alloc = self._alloc()
         self.assertAlmostEqual(alloc.number_of_days, 0.5, places=5,
                                msg="Before write: 4h * 1.0 / 8h = 0.5d")
-        self.assertFalse(att.overtime_attendance_ids,
-                         "In-place case: no output children exist")
 
-        # shorten check_out: source credit reversed -> allocation drops to 0
-        att.write({'check_out': datetime(2022, 12, 10, 10)})
+        # shorten child check_out: child credit reversed (ot_type != condition att_type -> no re-credit)
+        child.write({'check_out': datetime(2022, 12, 10, 10)})
 
         alloc.invalidate_recordset()
         self.assertAlmostEqual(
             alloc.number_of_days, 0.0, places=5,
-            msg="After write: source credit reversed; engine skips (WET mismatch) -> 0d",
+            msg="After write: child credit reversed; engine skips (WET mismatch) -> 0d",
         )
 
     def test_source_write_no_change_when_non_time_field(self):
@@ -287,20 +288,23 @@ class TestTimeRuleAllocationLog(TransactionCase):
 
     # multi-source selective reversal
     def test_two_sources_independent_reversal(self):
-        """Two Saturday attendances both credit the same allocation; deleting one reverses only its share."""
+        """Two Saturday attendances both credit the same allocation; deleting one output reverses only its share."""
         self._make_rule()
         att1 = self._make_att(datetime(2022, 12, 10, 8), datetime(2022, 12, 10, 12))   # 4h Sat
         self._make_att(datetime(2022, 12, 17, 8), datetime(2022, 12, 17, 16))  # 8h next Sat
 
         alloc = self._alloc()
-        # 4h + 8h excess, all in-place -> 0.5d + 1.0d = 1.5d total
+        # 4h + 8h excess -> 0.5d + 1.0d = 1.5d total
         self.assertAlmostEqual(alloc.number_of_days, 1.5, places=5,
                                msg="Both attendances must credit the same allocation")
 
         logs = self._logs()
-        self.assertEqual(len(logs), 2, "One log entry per source attendance")
+        self.assertEqual(len(logs), 2, "One log entry per output child")
 
-        att1.unlink()
+        # unlink the output child of att1 to reverse its share
+        child1 = att1.overtime_attendance_ids
+        self.assertEqual(len(child1), 1, "Prerequisite: att1 must have one output child")
+        child1.unlink()
 
         alloc.invalidate_recordset()
         self.assertAlmostEqual(
@@ -378,9 +382,11 @@ class TestTimeRuleAllocationLog(TransactionCase):
             'state': 'validate',
         })
 
-        # unlink att -> tries to reverse 1.0d; virtual_remaining = 0 - 1.0 = -1.0 < 0 -> blocked
+        # unlink output child -> tries to reverse 1.0d; virtual_remaining = 0 - 1.0 = -1.0 < 0 -> blocked
+        child = att.overtime_attendance_ids
+        self.assertEqual(len(child), 1, "Prerequisite: output child must exist")
         with self.assertRaises(ValidationError):
-            att.unlink()
+            child.unlink()
 
         alloc.invalidate_recordset()
         self.assertAlmostEqual(alloc.number_of_days, 1.0, places=5,
