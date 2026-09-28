@@ -9,7 +9,7 @@ import { mountComponent } from "@web/env";
 import { session } from "@web/session";
 
 (async function boot() {
-    if (!canLoadLivechat()) {
+    if (!window.isSecureContext || !canLoadLivechat()) {
         return;
     }
     session.origin = session.livechatData.serverUrl;
