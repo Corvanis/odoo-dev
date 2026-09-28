@@ -58,3 +58,18 @@ class TestAccountBaseDocumentLayout(AccountTestInvoicingCommon):
 
         self.assertEqual(action, report_action)
         self.assertFalse(company.external_report_layout_id)
+
+    def test_document_layout_preview_thailand_company(self):
+        report_layout = self.env['report.layout'].search([], limit=1)
+        thai_country = self.env.ref('base.th')
+        company = self.company_data['company']
+        company.write({
+            'country_id': thai_country.id,
+            'vat': '0123456789016',
+        })
+        wizard = self.env['base.document.layout'].create({
+            'company_id': company.id,
+            'report_layout_id': report_layout.id,
+        })
+        self.assertEqual(wizard.account_fiscal_country_id, company.account_fiscal_country_id)
+        self.assertTrue(wizard.preview)
