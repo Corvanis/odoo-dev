@@ -1074,16 +1074,14 @@ class AccountMove(models.Model):
             else:
                 move.invoice_payment_term_id = False
 
-    @api.depends('needed_terms', 'status_in_payment')
+    @api.depends('needed_terms')
     def _compute_invoice_date_due(self):
         today = fields.Date.context_today(self)
         for move in self:
-            move.invoice_date_due = None if move.status_in_payment == 'cancel' else (
-                move.needed_terms and max(
+            move.invoice_date_due = move.needed_terms and max(
                 (k['date_maturity'] for k in move.needed_terms.keys() if k),
                 default=False,
                 ) or move.invoice_date_due or today 
-            )
 
     def _compute_delivery_date(self):
         pass
