@@ -122,13 +122,21 @@ class ResourceCalendarLeaves(models.Model):
         """
         resource_calendars = self._get_resource_calendars()
         work_hours_data = self._work_time_per_day(resource_calendars)
-        employees_groups = self.env['hr.employee']._read_group(
-            [('resource_calendar_id', 'in', resource_calendars.ids), ('company_id', 'in', self.company_id.ids if self.company_id else self.env.companies.ids)],
+        employees_groups = self.env['hr.version']._read_group(
+            [
+                ('resource_calendar_id', 'in', resource_calendars.ids),
+                ('company_id', 'in', self.company_id.ids if self.company_id else self.env.companies.ids),
+                ('contract_date_start', '<=', self.date_to),
+                '|',
+                    ('contract_date_end', '>=', self.date_from),
+                    ('contract_date_end', '=', False),
+
+            ],
             ['resource_calendar_id'],
             ['id:recordset'])
         mapped_employee = {
-            resource_calendar.id: employees
-            for resource_calendar, employees in employees_groups
+            resource_calendar.id: versions.mapped('employee_id')
+            for resource_calendar, versions in employees_groups
         }
         employee_ids_all = [_id for __, employees in employees_groups for _id in employees._ids]
         min_date = max_date = None
