@@ -23,8 +23,12 @@ class ProductTemplate(models.Model):
 
     def action_open_eta_codes_portal(self):
         self.ensure_one()
-        is_preprod = not self.env.company.l10n_eg_production_env
-        return {'type': 'ir.actions.act_url', 'url': f"https://{'preprod.' if is_preprod else ''}invoicing.eta.gov.eg/codeusages", 'target': 'new'}
+        is_preprod = self.env.company.l10n_eg_edi_api_mode != 'production'
+        return {
+            "type": "ir.actions.act_url",
+            "url": f"https://{'preprod.' if is_preprod else ''}invoicing.eta.gov.eg/codeusages",
+            "target": "new",
+        }
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -50,5 +54,9 @@ class ProductProduct(models.Model):
 
     def action_open_eta_codes_portal(self):
         self.ensure_one()
-        is_preprod = not self.env.company.l10n_eg_production_env
-        return {'type': 'ir.actions.act_url', 'url': f"https://{'preprod.' if is_preprod else ''}invoicing.eta.gov.eg/codeusages", 'target': 'new'}
+        is_preprod = self.env.company.l10n_eg_edi_api_mode != 'production'
+        return {
+            "type": "ir.actions.act_url",
+            "url": f"https://{'preprod.' if is_preprod else ''}invoicing.eta.gov.eg/codeusages",
+            "target": "new",
+        }
