@@ -392,7 +392,7 @@ def _safe_eval_code_object(expr: str | bytes, filename: str, mode: str):
     return c
 
 
-_safe_eval_code_object_cached = functools.lru_cache(maxsize=8192)(_safe_eval_code_object)
+_safe_eval_code_object_cached = functools.lru_cache(maxsize=1024)(_safe_eval_code_object)
 
 
 def safe_eval(expr, /, context=None, *, mode="eval", filename=None):

@@ -1608,6 +1608,9 @@ def start(preload=None, stop=False):
 
     rc = server.run(preload, stop)
 
+    from odoo.tools.safe_eval.evaluation import _safe_eval_code_object_cached
+    _logger.info(_safe_eval_code_object_cached.cache_info())
+
     if watcher:
         watcher.stop()
     # like the legend of the phoenix, all ends with beginnings
