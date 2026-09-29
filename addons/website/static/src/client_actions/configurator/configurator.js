@@ -15,7 +15,15 @@ import { rpc } from "@web/core/network/rpc";
 import { user } from "@web/core/user";
 import { mixCssColors } from "@web/core/utils/colors";
 import { router } from "@web/core/browser/router";
-import { Component, onMounted, onWillStart, proxy, useEffect, useListener } from "@odoo/owl";
+import {
+    Component,
+    onMounted,
+    onWillDestroy,
+    onWillStart,
+    proxy,
+    useEffect,
+    useListener,
+} from "@odoo/owl";
 import { standardActionServiceProps } from "@web/webclient/actions/action_service";
 import { fuzzyLevenshteinLookup } from "@web/core/utils/search";
 import { isBrowserSafari } from "@web/core/browser/feature_detection";
@@ -608,6 +616,13 @@ export class PaletteSelectionScreen extends Component {
         this.logoInputRef = useRef("logoSelectionInput");
         this.notification = useService("notification");
         this.orm = useService("orm");
+        this.recommendationCancelled = false;
+        this.typingTimeouts = [];
+        onWillDestroy(() => {
+            // Stop pending characters from updating the shared state.
+            this.recommendationCancelled = true;
+            this.typingTimeouts.forEach(clearTimeout);
+        });
 
         if (this.state.logo) {
             this.updatePalettes();
@@ -681,6 +696,10 @@ Return ONLY a JSON object with:
         } catch {
             // Silently fail — the user can still pick manually
         }
+        // The RPC may finish after the screen has been destroyed.
+        if (this.recommendationCancelled) {
+            return;
+        }
         this.typingAnimation(reason);
         if (palette) {
             this.state.aiRecommendedPalette = palette.name;
@@ -701,9 +720,11 @@ Return ONLY a JSON object with:
             if (".,;:!?".includes(type)) {
                 delay += (100 + Math.random() * 180) * typingSpeed;
             }
-            setTimeout(() => {
-                this.state.styleRecommendation += type;
-            }, delay);
+            this.typingTimeouts.push(
+                setTimeout(() => {
+                    this.state.styleRecommendation += type;
+                }, delay)
+            );
         }
     }
 
