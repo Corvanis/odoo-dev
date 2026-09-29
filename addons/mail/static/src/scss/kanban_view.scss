@@ -17,15 +17,15 @@ $o-kanban-attachement-image-size: 80px;
         --Card-padding-v: var(--o-spacer-0);
 
         .o_kanban_image {
-            width: $o-kanban-attachement-image-size;
+            width: 80px;
 
             .o_kanban_image_wrapper {
-                min-height: $o-kanban-attachement-image-size;
+                min-height: 80px;
             }
 
             .o_attachment_image {
-                width: $o-kanban-attachement-image-size;
-                height: $o-kanban-attachement-image-size;
+                width: 80px;
+                height: 80px;
             }
 
             .o_image {
@@ -35,7 +35,7 @@ $o-kanban-attachement-image-size: 80px;
         }
 
         .o_kanban_details_wrapper {
-            min-height: $o-kanban-attachement-image-size;
+            min-height: 80px;
             padding: var(--o-kanban-inside-vgutter) var(--o-kanban-inside-hgutter);
         }
     }

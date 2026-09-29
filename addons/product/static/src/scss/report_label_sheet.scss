@@ -1,10 +1,3 @@
-/* These labels are rendered for CMYK print/PDF output, where modern layout */
-/* features such as flexbox and CSS grid are unreliable. Keep the layout based */
-/* on fixed dimensions and table/table-cell rules so printed labels stay */
-/* predictable. */
-$o-label-contour-mark-color: #222222;
-$o-label-contour-mark-gap: 1mm;
-$o-label-contour-mark-length: 1.25mm;
 $o-label-contour-mark-width: 0.35mm;
 
 @mixin o-label-truncation($white-space: nowrap) {
@@ -119,13 +112,13 @@ $o-label-contour-mark-width: 0.35mm;
     #{$outer-vertical-edge}: 0;
 
     .o_label_contour_mark_horizontal {
-        #{$inner-horizontal-edge}: $o-label-contour-mark-gap;
+        #{$inner-horizontal-edge}: 1mm;
         #{$outer-vertical-edge}: -$o-label-contour-mark-width;
     }
 
     .o_label_contour_mark_vertical {
         #{$inner-horizontal-edge}: 0;
-        #{$inner-vertical-edge}: $o-label-contour-mark-gap;
+        #{$inner-vertical-edge}: 1mm;
     }
 }
 
@@ -278,21 +271,21 @@ $o-label-contour-mark-width: 0.35mm;
 
             .o_label_contour_mark_horizontal,
             .o_label_contour_mark_vertical {
-                background-color: $o-label-contour-mark-color;
+                background-color: #222222;
                 display: block;
                 position: absolute;
             }
 
             .o_label_contour_mark_horizontal {
-                height: $o-label-contour-mark-width;
-                line-height: $o-label-contour-mark-width;
-                width: $o-label-contour-mark-length;
+                height: 0.35mm;
+                line-height: 0.35mm;
+                width: 1.25mm;
             }
 
             .o_label_contour_mark_vertical {
-                height: $o-label-contour-mark-length;
-                line-height: $o-label-contour-mark-length;
-                width: $o-label-contour-mark-width;
+                height: 1.25mm;
+                line-height: 1.25mm;
+                width: 0.35mm;
             }
         }
 

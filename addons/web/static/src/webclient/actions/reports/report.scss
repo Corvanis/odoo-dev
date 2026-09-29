@@ -2,7 +2,6 @@ $o-default-report-font: 'Lato' !default;
 $o-default-report-primary-color: $o-gray-900 !default;
 $o-default-report-secondary-color: $o-default-report-primary-color !default;
 $o-default-report-margins:  11mm !default; /* 7mm + container padding */
-$o-snailmail-address-padding-top: 42px;
 
 
 html, body {
@@ -156,7 +155,7 @@ div[name=comment] p, div[name=address] p {
     /* avoid breaking Pingen validation. !important because field template */
     /* comes with mb-0 utility class. */
     .address {
-        padding-top: $o-snailmail-address-padding-top;
+        padding-top: 42px;
 
         div[name="address"] > address {
             margin-bottom: 28px !important;
@@ -165,7 +164,7 @@ div[name=comment] p, div[name=address] p {
 
     /* Same as above for followup, because it doesn't use the same structure. */
     .o_followup_address {
-        padding-top: $o-snailmail-address-padding-top;
+        padding-top: 42px;
 
         div[itemscope="itemscope"] > div:first-child {
             margin-bottom: $spacer;

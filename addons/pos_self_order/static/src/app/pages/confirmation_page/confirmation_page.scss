@@ -1,5 +1,3 @@
-$o-pos-confirmation-width: 420px;
-$o-pos-confirmation-width-lg: 720px;
 
 .self_order_success_loader {
     z-index: 10;
@@ -8,7 +6,7 @@ $o-pos-confirmation-width-lg: 720px;
 .confirmation-page {
     .o_pos_order_box,
     .o_pos_status_base .btn {
-        max-width: $o-pos-confirmation-width;
+        max-width: 420px;
     }
 
     .o_pos_status_logo {
@@ -74,7 +72,7 @@ $o-pos-confirmation-width-lg: 720px;
             }
             .o_pos_order_box,
             .o_pos_status_base .btn {
-                max-width: $o-pos-confirmation-width-lg;
+                max-width: 720px;
             }
         }
     }
