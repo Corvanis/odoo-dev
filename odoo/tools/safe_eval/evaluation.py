@@ -383,6 +383,16 @@ _BUBBLEUP_EXCEPTIONS = (
     werkzeug.exceptions.HTTPException,
     ZeroDivisionError,
 )
+_MAX_CACHEABLE_EXPR_LEN = 1000
+
+
+def _safe_eval_code_object(expr: str | bytes, filename: str, mode: str):
+    c = compile_codeobj(expr, filename=filename, mode=mode)
+    assert_valid_codeobj(_SAFE_OPCODES, c, expr)
+    return c
+
+
+_safe_eval_code_object_cached = functools.lru_cache(maxsize=8192)(_safe_eval_code_object)
 
 
 def safe_eval(expr, /, context=None, *, mode="eval", filename=None):
@@ -424,8 +434,11 @@ def safe_eval(expr, /, context=None, *, mode="eval", filename=None):
         __builtins__=dict(_BUILTINS),
     )
 
-    c = compile_codeobj(expr, filename=filename, mode=mode)
-    assert_valid_codeobj(_SAFE_OPCODES, c, expr)
+    if isinstance(expr, (str, bytes)) and len(expr) < _MAX_CACHEABLE_EXPR_LEN:
+        c = _safe_eval_code_object_cached(expr, filename, mode)
+    else:
+        c = _safe_eval_code_object(expr, filename, mode)
+
     try:
         # empty locals dict makes the eval behave like top-level code
         return unsafe_eval(c, globals_dict, None)
