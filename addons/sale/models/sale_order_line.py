@@ -1586,11 +1586,10 @@ class SaleOrderLine(models.Model):
             })
 
     def _get_downpayment_line_price_unit(self, invoices):
-        return sum(
-            l.price_unit if l.move_id.move_type == 'out_invoice' else -l.price_unit
-            for l in self.invoice_lines
-            if l.move_id.state == 'posted' and l.move_id not in invoices  # don't recompute with the final invoice
-        )
+        total = 0
+        for line in self.invoice_lines.filtered(lambda l: l.move_id.state == 'posted' and l.move_id not in invoices):
+            total += line.price_unit * (1 if line.move_id.move_type == 'out_invoice' else -1) / line.currency_rate * self.order_id.currency_rate
+        return total
 
     def _get_grouped_section_summary(self, display_taxes=True):
         """Return a tax-wise summary of sales order lines linked to section.
