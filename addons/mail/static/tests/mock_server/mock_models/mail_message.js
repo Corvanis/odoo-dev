@@ -538,7 +538,17 @@ export class MailMessage extends models.ServerModel {
      * @param {number} [limit=30]
      * @returns {Object[]}
      */
-    _message_fetch(domain, thread, search_term, search_filter, before, after, around, limit) {
+    _message_fetch(
+        domain,
+        thread,
+        search_term,
+        search_filter,
+        before,
+        after,
+        around,
+        exclude_ids,
+        limit
+    ) {
         /** @type {import("mock_models").IrAttachment} */
         const IrAttachment = this.env["ir.attachment"];
         /** @type {import("mock_models").MailMessageSubtype} */
@@ -551,6 +561,7 @@ export class MailMessage extends models.ServerModel {
             before,
             after,
             around,
+            exclude_ids,
             limit = 30,
         } = getKwArgs(
             arguments,
@@ -561,9 +572,13 @@ export class MailMessage extends models.ServerModel {
             "before",
             "after",
             "around",
+            "exclude_ids",
             "limit"
         ));
         const res = {};
+        if (exclude_ids?.length) {
+            domain = domain.concat([["id", "not in", exclude_ids]]);
+        }
         if (thread) {
             domain = domain.concat([
                 ["res_id", "=", parseInt(thread[0].id)],
@@ -640,10 +655,12 @@ export class MailMessage extends models.ServerModel {
         if (after) {
             domain.push(["id", ">", after]);
         }
-        const messages = this._filter(domain).sort((m1, m2) => m2.id - m1.id);
-        // pick at most 'limit' messages
+        // pick at most 'limit' messages, the closest to 'after' if given
+        const messages = this._filter(domain).sort((m1, m2) =>
+            after ? m1.id - m2.id : m2.id - m1.id
+        );
         messages.length = Math.min(messages.length, limit);
-        res.messages = messages;
+        res.messages = after ? messages.reverse() : messages;
         return res;
     }
 

@@ -920,3 +920,37 @@ test("Can only mention internal users in Log note", async () => {
     await contains(".o-mail-Message:eq(0):has(:text('@External Partner'))");
     await contains(".o-mail-Message:eq(0):not(:has(a.o_mail_redirect))");
 });
+
+test("fetching new messages after posting does not skip messages posted in between", async () => {
+    const pyEnv = await startServer();
+    const partnerId = pyEnv["res.partner"].create({ name: "Frodo" });
+    pyEnv["mail.message"].create({
+        body: "Before opening",
+        message_type: "comment",
+        model: "res.partner",
+        res_id: partnerId,
+    });
+    await start();
+    await openFormView("res.partner", partnerId);
+    await contains(".o-mail-Message", { count: 1 });
+    // Posted by someone else while the chatter is open: not received from the bus.
+    pyEnv["mail.message"].create({
+        body: "Posted in between",
+        message_type: "comment",
+        model: "res.partner",
+        res_id: partnerId,
+    });
+    await click("button:text('Send message')");
+    await insertText(".o-mail-Composer-input", "Own message");
+    await click(".o-mail-Composer button[aria-label='Send']:enabled");
+    await contains(".o-mail-Message", { count: 2 });
+    const thread = getService("mail.store")["mail.thread"].insert({
+        model: "res.partner",
+        id: partnerId,
+    });
+    await thread.fetchNewMessages();
+    await contains(".o-mail-Message", { count: 3 });
+    await contains(".o-mail-Message:eq(0):has(:text('Own message'))");
+    await contains(".o-mail-Message:eq(1):has(:text('Posted in between'))");
+    await contains(".o-mail-Message:eq(2):has(:text('Before opening'))");
+});
