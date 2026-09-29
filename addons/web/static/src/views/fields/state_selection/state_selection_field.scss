@@ -8,14 +8,10 @@
         float: inline-end;
     }
 
-    .dropdown-toggle .o_status {
-        height: $h3-font-size;
-        width: $h3-font-size;
+    .o_has_not_label {
+        .o_state_selection_field_icon {
+            font-size: $h3-font-size;
+        }
     }
 }
 
-.o_list_renderer {
-    .o_field_state_selection {
-        margin-top: map-get($spacers, 1);
-    }
-}
