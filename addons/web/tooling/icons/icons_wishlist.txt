@@ -86,6 +86,7 @@ chevron_backward
 chevron_forward
 chevron_left
 chevron_right
+change_history
 child_care
 circle
 clear_all
@@ -401,6 +402,7 @@ stacks
 stadia_controller
 star
 star_half
+stat_0
 stethoscope
 sticky_note_2
 stop
