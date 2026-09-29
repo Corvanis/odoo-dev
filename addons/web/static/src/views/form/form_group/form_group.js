@@ -42,7 +42,7 @@ export class OuterGroup extends Group {
         const colSize = Math.max(1, Math.round(12 / nbCols));
 
         // Dispatch items across table rows
-        const items = super.getItems().filter(([k, v]) => !("isVisible" in v) || v.isVisible);
+        const items = super.getItems().filter(([, slot]) => slot.isVisible);
         return items.map((item) => {
             const [slotName, slot] = item;
             const itemSpan = slot.itemSpan || 1;
@@ -71,38 +71,25 @@ export class InnerGroup extends Group {
         let currentRow = [];
         let reservedSpace = 0;
 
-        // Dispatch items across table rows
-        const items = this.getItems();
-        while (items.length) {
-            const [slotName, slot] = items.shift();
+        // Dispatch visible items across table rows
+        for (const [slotName, slot] of this.getItems()) {
             if (!slot.isVisible) {
                 continue;
             }
 
-            const { newline, itemSpan, noBox } = slot;
-            if (newline) {
+            const itemSpan = slot.itemSpan || 1;
+            if (slot.newline || itemSpan + reservedSpace > maxCols) {
                 rows.push(currentRow);
                 currentRow = [];
                 reservedSpace = 0;
             }
 
-            const fullItemSpan = itemSpan || 1;
-
-            if (fullItemSpan + reservedSpace > maxCols) {
-                rows.push(currentRow);
-                currentRow = [];
-                reservedSpace = 0;
-            }
-
-            const isVisible = slot.isVisible;
-            currentRow.push({ ...slot, name: slotName, itemSpan, isVisible, noBox });
-            reservedSpace += itemSpan || 1;
-
-            // Allows to remove the line if the content is not visible instead of leaving an empty line.
-            currentRow.isVisible = isVisible;
+            currentRow.push({ ...slot, name: slotName });
+            reservedSpace += itemSpan;
         }
         rows.push(currentRow);
 
-        return rows;
+        // Skip the rows whose items are all invisible, instead of leaving empty lines.
+        return rows.filter((row) => row.length);
     }
 }
