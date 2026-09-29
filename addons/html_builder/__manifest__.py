@@ -58,6 +58,9 @@
             'html_builder/static/tests/**/*',
             ('include', 'html_builder.assets'),
         ],
+        'web._assets_bootstrap_backend': [
+            'html_builder/static/tokens/design_tokens.scss',
+        ],
     },
     'license': 'LGPL-3',
 }
