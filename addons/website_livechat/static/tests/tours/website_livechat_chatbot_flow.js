@@ -54,6 +54,11 @@ registry.category("web_tour.tours").add("website_livechat_chatbot_flow_tour", {
                 run: "click",
             },
             {
+                trigger:
+                    ".o-livechat-root:shadow .o-mail-ChatWindow .o-mail-Message[data-persistent]:text('I\\'d like to buy the software')",
+                run: "hover",
+            },
+            {
                 // check selected option is posted and reactions are available since
                 // the thread has been persisted in the process
                 trigger:
