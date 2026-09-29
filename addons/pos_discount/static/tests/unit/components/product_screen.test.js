@@ -69,3 +69,37 @@ test("addProductToOrder reapplies the global discount", async () => {
     expect(order.priceExcl).toBe(5.4);
     expect(order.amountTaxes).toBe(0.81);
 });
+
+test("change in discount line recomputes globalDiscountPc", async () => {
+    const store = await setupPosEnv();
+    const order = store.addNewOrder();
+    const product = store.models["product.template"].get(5);
+    const productScreen = await mountWithCleanup(ProductScreen, {
+        props: { orderUuid: order.uuid },
+    });
+    await productScreen.addProductToOrder(product);
+
+    expectFormattedPrice(productScreen.total, "$ 3.45");
+    expect(order.priceIncl).toBe(3.45);
+    expect(order.priceExcl).toBe(3);
+    expect(order.amountTaxes).toBe(0.45);
+
+    await store.applyDiscount(10);
+    expectFormattedPrice(productScreen.total, "$ 3.10");
+    expect(order.globalDiscountPc).toBeCloseTo(10.1, { margin: 0.1 });
+
+    order.discountLines[0].setUnitPrice(-1.5);
+
+    expect(order.globalDiscountPc).toBeCloseTo(50.1, { margin: 0.1 });
+    expectFormattedPrice(productScreen.currentOrder.currencyDisplayPrice, "$ 1.72");
+    expect(order.priceIncl).toBe(1.72);
+    expect(order.priceExcl).toBe(1.5);
+    expect(order.amountTaxes).toBe(0.22);
+
+    await productScreen.addProductToOrder(product);
+    await animationFrame();
+    expectFormattedPrice(productScreen.total, "$ 3.44");
+    expect(order.priceIncl).toBeCloseTo(3.44, { margin: 1e-12 });
+    expect(order.priceExcl).toBe(2.99);
+    expect(order.amountTaxes).toBe(0.45);
+});

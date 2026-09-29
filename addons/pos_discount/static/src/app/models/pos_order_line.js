@@ -23,4 +23,16 @@ patch(PosOrderline.prototype, {
             this.product_id.id === this.config.discount_product_id?.id
         );
     },
+    setUnitPrice(price) {
+        super.setUnitPrice(...arguments);
+        if (this.product_id !== this.config.discount_product_id) {
+            return;
+        }
+        const baseAmount = this.order_id.priceIncl - this.displayPrice;
+        const percent = baseAmount ? (this.displayPrice / baseAmount) * 100 : 0;
+
+        if (this.extra_tax_data) {
+            this.extra_tax_data.discount_percentage = percent * -1;
+        }
+    },
 });
