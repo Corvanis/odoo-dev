@@ -24,12 +24,11 @@ patch(ConfirmationDialog.prototype, {
     },
     async _reloadData() {
         this.props.close();
-        if (this.pos.config?.module_pos_restaurant) {
-            try {
-                await this.pos.syncAllOrders();
-            } catch (error) {
-                logPosMessage("Failed to sync orders:", error);
-            }
+        // Reloading wipes local orders, push the unsynced ones (e.g. paid) first
+        try {
+            await this.pos.syncAllOrders();
+        } catch (error) {
+            logPosMessage("Failed to sync orders:", error);
         }
         this.pos.dialog.add(SyncPopup, {
             title: _t("Reload Data"),
