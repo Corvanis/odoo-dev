@@ -97,8 +97,8 @@ export const quickActionSettings = {
     dropdownComponent: QuickVoiceSettings,
     dropdownMenuClass: ({ owner }) =>
         owner.env.inMeetingView
-            ? "o-discuss-CallActionList-menu overflow-x-hidden"
-            : "p-1 overflow-x-hidden",
+            ? "o-discuss-CallActionList-menu o-inMeetingView p-2 border-0 shadow overflow-x-hidden"
+            : "o-discuss-CallActionList-menu p-1 border-0 shadow overflow-x-hidden",
     dropdownPosition: "top-end",
     dropdownTrigger: true,
     extraContentComponent: TalkingAudioBars,
@@ -107,7 +107,8 @@ export const quickActionSettings = {
         session: channel?.eq(store.rtc.channel) ? store.rtc.selfSession : undefined,
     }),
     icon: "keyboard_arrow_up",
-    iconClass: "o-discuss-quickVoiceSettings-chevron",
+    iconClass:
+        "o-discuss-CallActionList-chevron o-discuss-quickVoiceSettings-chevron transition-base",
     name: _t("Voice Settings"),
     sequence: 15,
     sequenceGroup: 100,
@@ -170,11 +171,12 @@ export const quickVideoSettings = {
     dropdownComponent: QuickVideoSettings,
     dropdownMenuClass: ({ owner }) =>
         owner.env.inMeetingView
-            ? "o-discuss-CallActionList-menu overflow-x-hidden"
-            : "p-1 overflow-x-hidden",
+            ? "o-discuss-CallActionList-menu o-inMeetingView p-2 border-0 shadow overflow-x-hidden"
+            : "o-discuss-CallActionList-menu p-1 border-0 shadow overflow-x-hidden",
     dropdownPosition: "top-end",
     dropdownTrigger: true,
     icon: "keyboard_arrow_up",
+    iconClass: "o-discuss-CallActionList-chevron transition-base",
     name: _t("Video Settings"),
     sequence: 15,
     sequenceGroup: 120,

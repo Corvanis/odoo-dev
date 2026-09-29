@@ -76,10 +76,8 @@ export class CallActionList extends Component {
                                   {
                                       actions: moreActions,
                                       dropdownMenuClass: attClassObjectToString({
-                                          "m-0 mb-1 overflow-x-hidden": true,
-                                          "o-discuss-CallActionList-menu": Boolean(
-                                              this.env.inMeetingView
-                                          ),
+                                          "o-discuss-CallActionList-menu m-0 mb-1 border-0 shadow overflow-x-hidden": true,
+                                          "o-inMeetingView": Boolean(this.env.inMeetingView),
                                       }),
                                       dropdownPosition: "top-end",
                                       name: this.MORE,
@@ -105,10 +103,8 @@ export class CallActionList extends Component {
                             {
                                 actions: [layoutActions],
                                 dropdownMenuClass: attClassObjectToString({
-                                    "o-discuss-CallActionList-callLayout m-0 mb-1 overflow-x-hidden": true,
-                                    "o-discuss-CallActionList-menu o-inMeetingView": Boolean(
-                                        this.env.inMeetingView
-                                    ),
+                                    "o-discuss-CallActionList-callLayout o-discuss-CallActionList-menu m-0 mb-1 border-0 shadow overflow-x-hidden": true,
+                                    "o-inMeetingView": Boolean(this.env.inMeetingView),
                                 }),
                                 dropdownPosition: "top-end",
                                 id: "call-layout",
@@ -174,8 +170,8 @@ export class CallActionList extends Component {
                       {
                           actions: moreGroups,
                           dropdownMenuClass: attClassObjectToString({
-                              "m-0 mb-1 overflow-x-hidden": true,
-                              "o-discuss-CallActionList-menu": Boolean(this.env.inMeetingView),
+                              "o-discuss-CallActionList-menu m-0 mb-1 border-0 shadow overflow-x-hidden": true,
+                              "o-inMeetingView": Boolean(this.env.inMeetingView),
                           }),
                           dropdownPosition: "top-end",
                           id: "small-screen-more",

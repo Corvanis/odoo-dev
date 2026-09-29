@@ -62,7 +62,9 @@ export class MeetingSideActions extends Component {
                 threadActions.more(this.callActionsParams, {
                     actions: meetingMoreActionGroups(threadActions, QUICK_ACTION_IDS),
                     dropdownMenuClass: attClassObjectToString({
-                        "o-discuss-CallActionList-menu": Boolean(this.env.inMeetingView),
+                        "o-discuss-CallActionList-menu o-inMeetingView border-0 shadow": Boolean(
+                            this.env.inMeetingView
+                        ),
                     }),
                 })
             );
