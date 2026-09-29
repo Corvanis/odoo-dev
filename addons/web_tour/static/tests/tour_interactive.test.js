@@ -12,6 +12,7 @@ import {
     test,
     waitFor,
     waitForNone,
+    waitUntil,
 } from "@odoo/hoot";
 import { Component, onMounted, onPatched, proxy, xml } from "@odoo/owl";
 import {
@@ -30,7 +31,7 @@ import { registry } from "@web/core/registry";
 import { session } from "@web/session";
 import { WebClient } from "@web/webclient/webclient";
 import { TourInteractive } from "@web_tour/tour_interactive/tour_interactive";
-import { TourPointer } from "@web_tour/tour_pointer/tour_pointer";
+import { TourPointer, pointerState } from "@web_tour/tour_pointer/tour_pointer";
 import { Tour, TourStep } from "./tour_models";
 
 describe.current.tags("desktop");
@@ -99,7 +100,7 @@ beforeEach(() => {
 });
 
 after(() => {
-    TourInteractive.observer.disconnect();
+    TourInteractive.current?.stop();
 });
 
 test("registering test tour after service is started doesn't auto-start the tour", async () => {
@@ -670,14 +671,12 @@ test("validating click on autocomplete item by pressing Enter", async () => {
     await waitFor(".o_tour_pointer_tip");
     expect(".o_tour_pointer_tip").toHaveCount(1);
     await contains(".o-autocomplete--input").click();
-    await animationFrame();
-    expect(".o_tour_pointer_tip").toHaveCount(1);
+    await waitFor(".o_tour_pointer_tip");
     await press("Enter");
-    await animationFrame();
-    expect(".o_tour_pointer_tip").toHaveCount(1);
+    await waitUntil(() => pointerState.trigger === queryFirst(".o_form_button_save"));
+    await waitFor(".o_tour_pointer_tip");
     await contains(".o_form_button_save").click();
-    await animationFrame();
-    expect(".o_tour_pointer_tip").toHaveCount(0);
+    await waitForNone(".o_tour_pointer_tip");
 });
 
 test("Tour don't backward when dropdown loading", async () => {
@@ -731,8 +730,7 @@ test("Tour don't backward when dropdown loading", async () => {
     def.resolve();
 
     await waitFor(".o-autocomplete--dropdown-item:eq(1)");
-    await animationFrame();
-    expect(".o_tour_pointer_tip").toHaveCount(1);
+    await waitFor(".o_tour_pointer_tip");
     await contains(".o-autocomplete--dropdown-item:eq(1)").click();
     await animationFrame();
     expect(".o_tour_pointer_tip").toHaveCount(1);
@@ -819,19 +817,17 @@ test("Don't backward when action manager is busy", async () => {
     await animationFrame();
 
     await contains("button.fool").click();
-    await animationFrame();
-    expect(".o_tour_pointer").toHaveCount(0);
+    await waitForNone(".o_tour_pointer");
 
     await contains("button.foo").click();
-    await animationFrame();
-    expect(".o_tour_pointer").toHaveCount(1);
+    await waitUntil(() => pointerState.trigger === queryFirst("button.bar"));
+    await waitFor(".o_tour_pointer");
 
     comp.env.bus.trigger("ACTION_MANAGER:UI-UPDATED");
 
     await contains("button.fool").click();
-    await animationFrame();
-    await animationFrame();
-    expect(".o_tour_pointer").toHaveCount(1);
+    await waitUntil(() => pointerState.trigger === queryFirst("button.foo"));
+    await waitFor(".o_tour_pointer");
 
     await contains("button.foo").click();
     await animationFrame();

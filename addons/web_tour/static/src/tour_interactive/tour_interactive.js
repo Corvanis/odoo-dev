@@ -1,9 +1,9 @@
 import { markup } from "@odoo/owl";
 import { tourState } from "@web_tour/tour_state";
 import * as hoot from "@odoo/hoot-dom";
+import { Macro } from "@web/core/macro";
 import { utils } from "@web/core/ui/ui_utils";
 import { TourStepInteractive } from "@web_tour/tour_interactive/tour_step_interactive";
-import { TourInteractiveObserver } from "@web_tour/tour_interactive/tour_interactive_observer";
 import { TourPointer, pointerState } from "@web_tour/tour_pointer/tour_pointer";
 
 /**
@@ -14,7 +14,7 @@ import { TourPointer, pointerState } from "@web_tour/tour_pointer/tour_pointer";
  */
 
 export class TourInteractive {
-    static observer = null;
+    static current = null;
     static removePointer = () => {};
     mode = "manual";
     currentAction;
@@ -48,11 +48,17 @@ export class TourInteractive {
      */
     start(env) {
         TourInteractive.removePointer();
-        if (TourInteractive.observer) {
-            TourInteractive.observer.disconnect();
-        }
-        TourInteractive.observer = new TourInteractiveObserver(() => this._onMutation());
-        TourInteractive.observer.observe(document.body);
+        TourInteractive.current?.stop();
+        TourInteractive.current = this;
+        this.macro = new Macro({
+            name: this.name,
+            timeout: this.config.robot ? 10000 : Infinity,
+            steps: this.actions.map((action, index) => ({
+                trigger: () => this.track(action, index),
+            })),
+            onComplete: () => this.finish(),
+            onError: ({ error, index }) => this.fail(error, this.actions[index]),
+        });
         TourInteractive.removePointer = this.overlay.add(
             TourPointer,
             { pointerState },
@@ -88,54 +94,67 @@ export class TourInteractive {
 
     play() {
         this.removeListeners();
-        if (this.currentActionIndex === this.actions.length) {
-            TourInteractive.observer.disconnect();
-            this.finish();
-            return;
+        pointerState.trigger = undefined;
+        this.macro.play(this.currentActionIndex);
+    }
+
+    stop() {
+        this.macro.stop();
+        this.removeListeners();
+    }
+
+    track(action, index) {
+        if (!action.step.active) {
+            return true;
         }
-
-        this.currentAction = this.actions.at(this.currentActionIndex);
-
-        if (this.config.robot) {
-            clearTimeout(this.robotWatchdog);
-            const actionAtCall = this.currentAction;
-            this.robotWatchdog = setTimeout(() => {
-                if (this.currentAction === actionAtCall) {
-                    throw new Error(
-                        `Robot: no progress for 10s on step '${actionAtCall.anchor}'.\n` +
-                            actionAtCall.step.error.join("\n")
-                    );
-                }
-            }, 10000);
-        }
-
-        if (!this.currentAction.step.active) {
-            this.currentActionIndex++;
-            this.play();
-            return;
-        }
-
-        if (this.currentAction.event === "warn") {
-            if (!this.currentAction.findTrigger()) {
-                return;
+        const anchor = action.findTrigger();
+        if (action.event === "warn") {
+            if (anchor) {
+                console.log(`Step '${action.anchor}' ignored.`);
             }
-            console.log(`Step '${this.currentAction.anchor}' ignored.`);
-            this.currentActionIndex++;
-            this.play();
-            return;
+            return anchor;
         }
-
-        console.log(this.currentAction.event, this.currentAction.anchor);
-
-        tourState.setCurrentIndex(this.currentActionIndex);
-        this.anchorEl = this.currentAction.findTrigger();
-        this.setActionListeners();
-        if (!this.config.robot && this.anchorEl && !this.hasConsumeEvent) {
-            this.currentActionIndex++;
-            this.play();
-            return;
+        if (this.currentAction !== action) {
+            this.removeListeners();
+            this.currentAction = action;
+            this.currentActionIndex = index;
+            console.log(action.event, action.anchor);
+            tourState.setCurrentIndex(index);
         }
-        this.updatePointer();
+        if (anchor) {
+            if (anchor !== this.anchorEl) {
+                this.removeListeners();
+                this.anchorEl = anchor;
+                this.setActionListeners();
+                if (!this.config.robot && !this.hasConsumeEvent) {
+                    return true;
+                }
+            }
+            this.updatePointer();
+        } else if (this.anchorEl) {
+            if (
+                !hoot.queryFirst(".o_home_menu", { visible: true }) &&
+                !hoot.queryFirst(".dropdown-item.o_loading", { visible: true }) &&
+                !this.isBusy
+            ) {
+                this.backward();
+            } else {
+                pointerState.trigger = undefined;
+            }
+        }
+        return false;
+    }
+
+    fail(error, action) {
+        this.removeListeners();
+        if (error.type === "Timeout") {
+            console.error(
+                `Robot: no progress for ${this.macro.timeout}ms on step '${action.anchor}'.\n` +
+                    action.step.error.join("\n")
+            );
+        } else {
+            console.error(error.message);
+        }
     }
 
     async finish() {
@@ -421,32 +440,5 @@ export class TourInteractive {
         }
 
         return consumeEvents;
-    }
-
-    _onMutation() {
-        if (this.currentAction?.event === "warn") {
-            this.play();
-            return;
-        }
-        if (this.currentAction) {
-            const tempAnchor = this.currentAction.findTrigger();
-            if (tempAnchor && tempAnchor !== this.anchorEl) {
-                this.removeListeners();
-                this.anchorEl = tempAnchor;
-                this.setActionListeners();
-            } else if (!tempAnchor && this.anchorEl) {
-                if (
-                    !hoot.queryFirst(".o_home_menu", { visible: true }) &&
-                    !hoot.queryFirst(".dropdown-item.o_loading", { visible: true }) &&
-                    !this.isBusy
-                ) {
-                    this.backward();
-                } else {
-                    pointerState.trigger = undefined;
-                }
-                return;
-            }
-            this.updatePointer();
-        }
     }
 }
