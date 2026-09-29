@@ -19,6 +19,7 @@ import { processModelDefs } from "./model_defs";
 import { createExtraField, processModelClasses } from "./model_classes";
 import { ormSerialization } from "./serialization";
 import { toRaw, proxy } from "@odoo/owl";
+import { getOutdatedRecords } from "./cleanup";
 const AVAILABLE_EVENT = ["create", "update", "delete"];
 
 export function createRelatedModels(modelDefs, modelClasses = {}, opts = {}) {
@@ -550,6 +551,7 @@ export function createRelatedModels(modelDefs, modelClasses = {}, opts = {}) {
             }
 
             this.lastUpdateDate = Date.now();
+            record.touch();
 
             aggregatedUpdates.fireEventAndDirty({
                 silentModels: opts.silent ? [record.model.name] : [],
@@ -692,6 +694,15 @@ export function createRelatedModels(modelDefs, modelClasses = {}, opts = {}) {
             return commands;
         }
 
+        cleanup(dependencies) {
+            const outdated = getOutdatedRecords(this, opts, dependencies);
+            for (const [model, records] of Object.entries(outdated)) {
+                for (const record of records) {
+                    this[model].delete(record);
+                }
+            }
+        }
+
         /**
          * Loads data that is already fully connected, meaning relationships do not need to be computed.
          * This method is typically used when loading the initial dataset from the backend.
@@ -820,6 +831,9 @@ export function createRelatedModels(modelDefs, modelClasses = {}, opts = {}) {
             if (!recordToConnect) {
                 return;
             }
+            if (!this._loadingData) {
+                recordToConnect.touch();
+            }
             if (field.type === "many2one") {
                 const prevConnectedRecordId = ownerRecord[RAW_SYMBOL][field.name];
                 if (prevConnectedRecordId === recordToConnect.id) {
@@ -928,6 +942,10 @@ function setupRecord(record, vals, uiState, isUpdate = false) {
         record.restoreState(uiState);
     } else if (!isUpdate) {
         record.initState();
+    }
+    // Keep the restored date when the record is only rehydrated (e.g. from indexedDB)
+    if (isUpdate || !uiState?.lastUse) {
+        record.touch();
     }
 }
 

@@ -125,6 +125,7 @@ export default class OrderPaymentValidation {
             }
 
             await this.shouldHideValidationBehindFeedbackScreen();
+            this.pos.data.cleanOutdatedRecords();
             return true;
         }
 
