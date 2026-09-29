@@ -20,6 +20,7 @@
 
 .o-mail-ImStatus-typingBg {
     padding: 2px;
+    width: 23px; // typing dots are spread by flex spacers, so the pill sets its own width
 }
 
 .o-mail-ImStatus-typingContainer {
