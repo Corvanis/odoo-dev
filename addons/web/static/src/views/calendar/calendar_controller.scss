@@ -96,7 +96,7 @@ $o-cw-filter-avatar-size: 20px;
         @extend %o-html-layout-fill;
 
         .o_calendar_renderer {
-            .fc-view {
+            .o_calendar_fc_view {
                 border-top: 0;
             }
 

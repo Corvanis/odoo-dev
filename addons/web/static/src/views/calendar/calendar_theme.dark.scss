@@ -1,0 +1,14 @@
+:root {
+    --o-calendar-faint: #{$gray-300};
+    --o-calendar-shadow: #{to-rgb($white)};
+    --o-calendar-divider-size: 25px;
+    --o-calendar-divider-opacity: .25;
+}
+
+@for $i from 1 through length($o-colors-complete) {
+    $color: nth($o-colors-complete, $i);
+
+    .o_calendar_color_#{$i - 1}.o_calendar_bg_event {
+        --fc-event-color: #{mix($o-white, $color, 25%)};
+    }
+}

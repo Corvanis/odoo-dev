@@ -8,7 +8,7 @@ import {
     useProps,
 } from "@odoo/owl";
 import { loadBundle } from "@web/core/assets";
-import { withCompatOptions } from "@web/views/calendar/hooks/full_calendar_compat";
+import { odooCalendarTheme } from "@web/views/calendar/calendar_theme";
 
 /**
  * @param {import("@odoo/owl").Signal<HTMLElement>} ref
@@ -21,7 +21,9 @@ export function useFullCalendar(ref, params) {
     onWillStart(() => loadBundle("web.fullcalendar_lib"));
     onMounted(() => {
         try {
-            instance.set(new FullCalendar.Calendar(ref(), withCompatOptions(params)));
+            instance.set(
+                new FullCalendar.Calendar(ref(), { plugins: [odooCalendarTheme], ...params })
+            );
             instance().render();
         } catch (e) {
             throw new Error(`Cannot instantiate FullCalendar\n${e.message}`);
