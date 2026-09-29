@@ -103,6 +103,8 @@ const COMPAT_CLASSES = {
     tableHeaderClass: "fc-scrollgrid-section-header",
     tableBodyClass: "fc-scrollgrid-section-body",
     dayRowClass: "fc-daygrid-row",
+    singleMonthClass: "fc-multimonth-month",
+    singleMonthHeaderInnerClass: "fc-multimonth-title",
 };
 
 function composeClassGenerators(compat, custom) {
