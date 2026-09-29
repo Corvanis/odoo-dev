@@ -26,6 +26,7 @@ It also includes the invoice OCR payment reference handling.
         "data/res_country_data.xml",
         'views/partner_view.xml',
         'views/account_journal_view.xml',
+        'views/account_move_views.xml',
     ],
     'demo': [
         'demo/demo_company.xml',
