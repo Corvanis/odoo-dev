@@ -1,6 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.urls import urljoin as url_join
 
 
 class ResPartner(models.Model):
@@ -126,6 +127,42 @@ class ResPartner(models.Model):
                 self._message_log(body=self.env._('An unexpected error occurred while validating the TIN. Please try again later.'))
         else:
             self.l10n_my_tin_validation_state = 'valid' if response.get('success') else 'invalid'
+
+    def action_search_tin(self):
+        """ Calling this action will reach our EDI proxy in order to search for the TIN based on the provided identification information. """
+        self.ensure_one()
+        if not self.l10n_my_identification_type or not self.l10n_my_identification_number:
+            raise UserError(self.env._('In order to search for the TIN, you must provide the Identification type and number.'))
+
+        # Sudo to allow a user without access to the proxy user to search the TIN if needed.
+        proxy_user = self.env.company.sudo().l10n_my_edi_proxy_user_id
+        if not proxy_user:
+            raise UserError(self.env._("Please register for the E-Invoicing service in the settings first."))
+
+        response = proxy_user._l10n_my_edi_contact_proxy('api/l10n_my_edi/1/search_tin', params={
+            'identification_values': {
+                'id_type': self.l10n_my_identification_type,
+                'id_val': self.l10n_my_identification_number,
+            },
+        })
+
+        if 'error' in response:
+            ref = response['error']['reference']
+            # No need to rollback, we don't want to be blocking on that.
+            if ref == 'search_tin_bad_argument':
+                self._message_log(body=self.env._('The provided identification parameters are invalid. Please check the ID type and value.'))
+            elif ref == 'search_tin_multiple_results':
+                self._message_log(body=self.env._('Multiple TINs found matching the search criteria. Please refine your search with more specific information.'))
+            elif ref == 'search_tin_not_found':
+                self._message_log(body=self.env._('No TIN found matching the search criteria. Please check the identification information.'))
+            else:
+                details = response['error'].get('data', {}).get('details', 'Unknown error')
+                self._message_log(body=self.env._('An unexpected error occurred while searching for the TIN: %s') % details)
+        elif response.get('success') and response.get('tin'):
+            self.vat = response['tin']  # Automatically populate the VAT field with the found TIN
+            self._message_log(body=self.env._('TIN search successful! Found TIN: %s') % response['tin'])
+        else:
+            self._message_log(body=self.env._('TIN search did not return a valid result.'))
 
     def _l10n_my_edi_get_tin_for_myinvois(self):
         """ Helper to return the VAT number relevant to the situation. """
