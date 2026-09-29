@@ -18,7 +18,7 @@ import {
     startServer,
     waitStoreFetch,
 } from "@mail/../tests/mail_test_helpers";
-import { PRESENT_VIEWPORT_THRESHOLD } from "@mail/core/common/thread";
+import { JUMP_TO_END_VIEWPORT_THRESHOLD } from "@mail/utils/common/scroll";
 
 describe.current.tags("desktop");
 defineMailModels();
@@ -39,7 +39,7 @@ test("Basic jump to present when scrolling to outdated messages", async () => {
     await contains(".o-mail-Message", { count: 20 });
     await contains(".o-mail-Thread");
     expect(document.querySelector(".o-mail-Thread").scrollHeight).toBeGreaterThan(
-        PRESENT_VIEWPORT_THRESHOLD * document.querySelector(".o-mail-Thread").clientHeight,
+        JUMP_TO_END_VIEWPORT_THRESHOLD * document.querySelector(".o-mail-Thread").clientHeight,
         { message: "should have enough scroll height to trigger jump to present" }
     );
     await click("[title='Jump to Present']");
@@ -64,7 +64,7 @@ test("Basic jump to present when scrolling to outdated messages (DESC, chatter a
     await contains(".o-mail-Message", { count: 20 });
     await contains(".o-mail-Thread");
     expect(document.querySelector(".o-mail-Chatter").scrollHeight).toBeGreaterThan(
-        PRESENT_VIEWPORT_THRESHOLD * document.querySelector(".o-mail-Chatter").clientHeight,
+        JUMP_TO_END_VIEWPORT_THRESHOLD * document.querySelector(".o-mail-Chatter").clientHeight,
         { message: "should have enough scroll height to trigger jump to present" }
     );
     await contains(".o-mail-Chatter", { scroll: 0 });
@@ -93,7 +93,7 @@ test.skip("Basic jump to present when scrolling to outdated messages (DESC, chat
     await contains(".o-mail-Message", { count: 20 });
     await contains(".o_content");
     expect(document.querySelector(".o_content").scrollHeight).toBeGreaterThan(
-        PRESENT_VIEWPORT_THRESHOLD * document.querySelector(".o_content").clientHeight,
+        JUMP_TO_END_VIEWPORT_THRESHOLD * document.querySelector(".o_content").clientHeight,
         { message: "should have enough scroll height to trigger jump to present" }
     );
     await contains(".o_content", { scroll: 0 });
