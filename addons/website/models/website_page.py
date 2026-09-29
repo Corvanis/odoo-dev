@@ -413,7 +413,17 @@ class WebsitePage(models.Model):
             if response:
                 response.flatten()
                 if self._allow_cache_insertion(response.response[-1]):
-                    self._get_response_cached.__cache__.add_value(self, request, cache_value=(response, cache_key))
+                    cached_response = http.Response(
+                        headers=response.headers.copy(),
+                        mimetype=response.mimetype,
+                        content_type=response.content_type,
+                        status=response.status,
+                        response=[response.response[0]],
+                    )
+                    cached_response.time = response.time
+                    self._get_response_cached.__cache__.add_value(
+                        self, request, cache_value=(cached_response, cache_key),
+                    )
             return response
 
         return self._get_response_raw(request)

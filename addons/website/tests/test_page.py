@@ -314,6 +314,46 @@ class WithContext(HttpCase):
             r = self.url_open(self.page.url)
         self.assertEqual(r.status_code, 404, "Restricted users should see a 404 as the page is unpublished")
 
+    def test_expired_page_cache_does_not_replay_session_cookie(self):
+        """Refreshing a page cache must not cache the refreshing visitor's cookie."""
+        Page = type(self.env['website.page'])
+        with freeze_time() as clock, patch.object(
+            Page, '_get_response_raw', autospec=True, side_effect=Page._get_response_raw,
+        ) as render_page:
+            # Populate the cache, then expire the existing entry
+            self.url_open(self.page.url).raise_for_status()
+            self.assertEqual(render_page.call_count, 1)
+            clock.tick(self.page._CACHE_DURATION + 1)
+
+            # A new visitor loads the page, refreshing the cache
+            self.opener.cookies.clear()
+            response_a = self.url_open(self.page.url)
+            response_a.raise_for_status()
+            sid_a = self.opener.cookies.get('session_id')
+            self.assertTrue(sid_a)
+            self.assertEqual(render_page.call_count, 2)
+
+            self.opener.cookies.clear()
+            response_b = self.url_open(self.page.url)
+            response_b.raise_for_status()
+            sid_b = self.opener.cookies.get('session_id')
+            self.assertNotEqual(sid_a, sid_b)
+            # if the cookies are cached, the new visitor could get both a new session cookie and the
+            # cached one, so we check for all of them
+            with self.subTest('new visitor'):
+                session_cookies = [
+                    header.split(';', 1)[0]
+                    for header in response_b.raw.headers.getlist('Set-Cookie')
+                    if header.startswith('session_id=')
+                ]
+                self.assertEqual(session_cookies, [f'session_id={sid_b}'])
+
+            # Ensure that visitor B retains their cookie and not a cached one from visitor A
+            response = self.url_open(self.page.url)
+            response.raise_for_status()
+            self.assertEqual(self.opener.cookies.get('session_id'), sid_b)
+            self.assertEqual(render_page.call_count, 2) # ensure we still hit the cache
+
     @mute_logger('odoo.addons.rpc.controllers.xmlrpc')
     def test_search(self):
         dbname = common.get_db_name()
