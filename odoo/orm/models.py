@@ -473,6 +473,7 @@ class BaseModel(metaclass=MetaModel):
     display_name = Char(
         string='Display Name',
         compute='_compute_display_name',
+        compute_sudo=True,
         search='_search_display_name',
     )
 
@@ -1445,8 +1446,11 @@ class BaseModel(metaclass=MetaModel):
         """
         if self._rec_name:
             convert = self._fields[self._rec_name].convert_to_display_name
-            for record in self:
+            accessible_records = self.sudo(False)._filtered_access('read')
+            not_accessible_records = self - accessible_records
+            for record in accessible_records:
                 record.display_name = convert(record[self._rec_name], record)
+            not_accessible_records.display_name = _("Restricted Record")
         else:
             for record in self:
                 record.display_name = f"{record._name},{record.id}"
