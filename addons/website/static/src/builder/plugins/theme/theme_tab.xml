@@ -136,4 +136,11 @@
     </BuilderContext>
 </t>
 
+<!-- Note: This is a temporary fix to change the input field's color picker and will be removed in master -->
+<t t-inherit="website.ThemeInputOption" t-inherit-mode="extension">
+    <xpath expr="//BuilderColorPicker[@noTransparency]" position="attributes">
+        <attribute name="noTransparency">true</attribute>
+    </xpath>
+</t>
+
 </templates>
