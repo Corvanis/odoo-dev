@@ -29,12 +29,9 @@ class ProductProduct(models.Model):
             repairs.uom_id = to_uom_id
         return super()._update_uom(to_uom_id)
 
+
 class ProductTemplate(models.Model):
     _inherit = "product.template"
 
     service_tracking = fields.Selection(selection_add=[('repair', 'Repair Order')],
                                         ondelete={'repair': 'set default'})
-
-    @api.model
-    def _get_saleable_tracking_types(self):
-        return super()._get_saleable_tracking_types() + ['repair']
