@@ -1,7 +1,7 @@
 from odoo import models
 from odoo.tools import html2plaintext
 
-PAID_STATES = frozenset({'in_payment', 'paid'})
+PAID_STATES = frozenset({'paid'})
 
 
 class AccountEdiCommon(models.AbstractModel):
