@@ -1021,6 +1021,7 @@ class MailMessage(models.Model):
                 [("subject", "ilike", search_term)],
                 [("subtype_id.description", "ilike", search_term)],
             ])
+            message_domain |= self._get_poll_message_domain(thread, search_term)
             domain &= message_domain
         if search_term or is_filtered:
             res["count"] = self.search_count(domain)
@@ -1036,6 +1037,36 @@ class MailMessage(models.Model):
         if after:
             res["messages"] = res["messages"].sorted('id', reverse=True)
         return res
+
+    def _get_poll_message_domain(self, thread, search_term):
+        start_poll_domain = (
+            Domain("start_message_id.res_id", "=", thread.id)
+            & Domain("start_message_id.model", "=", thread._name)
+            & Domain.OR([
+                Domain("poll_question", "ilike", search_term),
+                Domain("option_ids.option_label", "ilike", search_term),
+            ])
+        )
+        end_poll_domain = (
+            Domain("end_message_id.res_id", "=", thread.id)
+            & Domain("end_message_id.model", "=", thread._name)
+            & Domain.OR([
+                Domain("poll_question", "ilike", search_term),
+                Domain("winning_option_id.option_label", "ilike", search_term),
+            ])
+        )
+
+        # sudo: mail.poll - searching allowed polls for accessible records
+        poll_ids = self.env["mail.poll"].sudo().search(
+            Domain.OR([start_poll_domain, end_poll_domain]),
+        )
+        start_poll_ids = poll_ids.filtered_domain(start_poll_domain)
+        end_poll_ids = poll_ids.filtered_domain(end_poll_domain)
+
+        return Domain.OR([
+            Domain("id", "in", start_poll_ids.start_message_id.ids),
+            Domain("id", "in", end_poll_ids.end_message_id.ids),
+        ])
 
     def _get_tracking_values_domain(self, search_term):
         """Get the domain to search for tracking values."""
