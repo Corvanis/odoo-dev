@@ -28,7 +28,9 @@ class TestUiSEPA(TestPosQrCommon):
             'qr_code_method': "sct_qr"
         })
         cls.main_pos_config.write({
-            'payment_method_ids': [(4, qr_payment.id)]
+            'payment_method_ids': [(4, qr_payment.id)],
+            'fast_payment_method_ids': [(4, qr_payment.id)],
+            'use_fast_payment': True,
         })
 
     @mute_logger('odoo.http')
@@ -58,6 +60,7 @@ class TestUiSEPA(TestPosQrCommon):
         self.main_pos_config.with_user(self.pos_user).open_ui()
 
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'PaymentScreenWithQRPayment', login="pos_user")
+        self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'test_fast_payment_with_qr_method', login="pos_user")
 
 
 @tagged('post_install_l10n', 'post_install', '-at_install')

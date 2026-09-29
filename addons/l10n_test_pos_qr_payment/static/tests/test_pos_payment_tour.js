@@ -1,5 +1,6 @@
 import * as ProductScreen from "@point_of_sale/../tests/pos/tours/utils/product_screen_util";
 import * as PaymentScreen from "@point_of_sale/../tests/pos/tours/utils/payment_screen_util";
+import * as ReceiptScreen from "@point_of_sale/../tests/pos/tours/utils/receipt_screen_util";
 import * as Dialog from "@point_of_sale/../tests/generic_helpers/dialog_util";
 import * as Chrome from "@point_of_sale/../tests/pos/tours/utils/chrome_util";
 
@@ -90,6 +91,30 @@ registry.category("web_tour.tours").add("PaymentScreenWithQRPayment", {
             },
             PaymentScreen.clickPaymentMethod("Bank"),
             PaymentScreen.clickValidate(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_fast_payment_with_qr_method", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+
+            ProductScreen.addOrderline("Hand Bag", "10"),
+            ProductScreen.selectedOrderlineHas("Hand Bag", "10"),
+
+            // Trigger the quick payment flow with the QR Code method.
+            ProductScreen.clickFastPaymentButton("QR Code"),
+            isQRDisplayedinDialog(),
+
+            // Cancel the QR dialog and ensure the POS screen is still active.
+            Dialog.cancel(),
+            ProductScreen.isShown(),
+
+            // Retry the quick payment and confirm the QR dialog before finishing.
+            ProductScreen.clickFastPaymentButton("QR Code"),
+            isQRDisplayedinDialog(),
+            Dialog.confirm(),
+            ReceiptScreen.isShown(),
         ].flat(),
 });
 
