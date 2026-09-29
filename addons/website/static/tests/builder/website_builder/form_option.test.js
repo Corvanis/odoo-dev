@@ -116,6 +116,139 @@ test("change action of form changes available options", async () => {
     expect(".hb-row[data-label='URL'] input").toHaveValue("/contactus-thank-you");
 });
 
+test("required many2one action field without records offers to create one", async () => {
+    onRpc("get_authorized_fields", () => ({}));
+    function withIframeRegistry(registry) {
+        registry.category("website.form_editor_actions").add("apply_job", {
+            fields: [
+                {
+                    name: "job_id",
+                    type: "many2one",
+                    relation: "hr.job",
+                    required: true,
+                    string: "Applied Job",
+                    noRecordMessage: "Create a job position first.",
+                    createAction: "hr.action_hr_job",
+                },
+            ],
+        });
+    }
+    await setupWebsiteBuilderWithSnippet("s_website_form", { withIframeRegistry });
+    await contains(":iframe section").click();
+    await contains(".hb-row[data-label='Action'] button").click();
+    await contains("div.o-dropdown-item:contains('Apply for a Job')").click();
+
+    expect(
+        ".alert:contains('Create a job position first.') ~ .hb-row[data-label='Action']"
+    ).toHaveCount(1);
+    expect(".hb-row[data-label='Applied Job'] .o_select_menu").toHaveCount(0);
+    expect(".hb-row[data-label='Applied Job'] button.btn-success").toHaveCount(1);
+
+    await contains(".hb-row[data-label='Action'] button").click();
+    await contains("div.o-dropdown-item:contains('Create a Customer')").click();
+    expect(".alert:contains('Create a job position first.')").toHaveCount(0);
+});
+
+test("action field creation stops before the dialog when its canCreate refuses", async () => {
+    onRpc("get_authorized_fields", () => ({}));
+    let canCreate = false;
+    function withIframeRegistry(registry) {
+        registry.category("website.form_editor_actions").add("apply_job", {
+            fields: [
+                {
+                    name: "job_id",
+                    type: "many2one",
+                    relation: "hr.job",
+                    required: true,
+                    string: "Applied Job",
+                    createAction: "hr.action_hr_job",
+                    canCreate: () => canCreate,
+                },
+            ],
+        });
+    }
+    await setupWebsiteBuilderWithSnippet("s_website_form", { withIframeRegistry });
+    await contains(":iframe section").click();
+    await contains(".hb-row[data-label='Action'] button").click();
+    await contains("div.o-dropdown-item:contains('Apply for a Job')").click();
+
+    await contains(".hb-row[data-label='Applied Job'] button[title='Create New']").click();
+    expect(".o_dialog").toHaveCount(0);
+
+    canCreate = true;
+    await contains(".hb-row[data-label='Applied Job'] button[title='Create New']").click();
+    expect(".o_dialog").toHaveCount(1);
+});
+
+test("required many2one action field defaults to its oldest record", async () => {
+    onRpc("get_authorized_fields", () => ({}));
+    // Not sorted by id, as the records come in the model's order.
+    onRpc("hr.job", "search_read", () => [
+        { id: 2, display_name: "Designer" },
+        { id: 1, display_name: "Developer" },
+    ]);
+    function withIframeRegistry(registry) {
+        registry.category("website.form_editor_actions").add("apply_job", {
+            fields: [
+                {
+                    name: "job_id",
+                    type: "many2one",
+                    relation: "hr.job",
+                    required: true,
+                    string: "Applied Job",
+                },
+            ],
+        });
+    }
+    await setupWebsiteBuilderWithSnippet("s_website_form", { withIframeRegistry });
+    await contains(":iframe section").click();
+    await contains(".hb-row[data-label='Action'] button").click();
+    await contains("div.o-dropdown-item:contains('Apply for a Job')").click();
+
+    expect(":iframe input[name='job_id']").toHaveValue("1");
+    expect(".hb-row[data-label='Applied Job'] .o_select_menu_toggler").toHaveText("Developer");
+
+    await contains(".hb-row[data-label='Applied Job'] .o_select_menu_toggler").click();
+    await contains(".o_popover [data-action-value='2']").click();
+    expect(":iframe input[name='job_id']").toHaveValue("2");
+    expect(".hb-row[data-label='Applied Job'] .o_select_menu_toggler").toHaveText("Designer");
+});
+
+test("many2one action field choices are refreshed when changing action", async () => {
+    onRpc("get_authorized_fields", () => ({}));
+    onRpc("hr.job", "search_read", () => [{ id: 1, display_name: "Developer" }]);
+    onRpc("res.partner", "search_read", () => [{ id: 7, display_name: "Partner Team" }]);
+    function withIframeRegistry(registry) {
+        registry
+            .category("website.form_editor_actions")
+            .add("apply_job", {
+                fields: [{ name: "team_id", type: "many2one", relation: "hr.job", string: "Team" }],
+            })
+            .add("create_customer", {
+                fields: [
+                    { name: "team_id", type: "many2one", relation: "res.partner", string: "Team" },
+                ],
+            });
+    }
+    await setupWebsiteBuilderWithSnippet("s_website_form", { withIframeRegistry });
+    await contains(":iframe section").click();
+    await contains(".hb-row[data-label='Action'] button").click();
+    await contains("div.o-dropdown-item:contains('Apply for a Job')").click();
+    await contains(".hb-row[data-label='Team'] .o_select_menu_toggler").click();
+    expect(queryAllTexts(".o_popover [data-action-id='addActionField']")).toEqual([
+        "None",
+        "Developer",
+    ]);
+
+    await contains(".hb-row[data-label='Action'] button").click();
+    await contains("div.o-dropdown-item:contains('Create a Customer')").click();
+    await contains(".hb-row[data-label='Team'] .o_select_menu_toggler").click();
+    expect(queryAllTexts(".o_popover [data-action-id='addActionField']")).toEqual([
+        "None",
+        "Partner Team",
+    ]);
+});
+
 test("'Author' field's type stays selected when you modify the option list", async () => {
     onRpc("get_authorized_fields", () => ({
         author_id: {

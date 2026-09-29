@@ -474,6 +474,19 @@ export class FormOptionPlugin extends Plugin {
                 if (!defaultValue && field.getDefaultValue) {
                     defaultValue = await field.getDefaultValue({ services: this.services });
                 }
+                if (
+                    field.required &&
+                    field.type === "many2one" &&
+                    !defaultValue &&
+                    field.records.length
+                ) {
+                    // Preset the oldest record so that the created records
+                    // (e.g. tasks) are linked to it and show up in the backend.
+                    defaultValue = field.records.reduce(
+                        (minId, record) => Math.min(minId, record.id),
+                        Infinity
+                    );
+                }
                 if (defaultValue || field.name === "email_to") {
                     this.addHiddenField(el, defaultValue, field.name);
                 }
@@ -1256,22 +1269,33 @@ export class PromptSaveRedirectAction extends BuilderAction {
     static dependencies = ["savePlugin"];
     setup() {
         this.canTimeout = false;
+        this.preview = false;
     }
-    apply({ params: { mainParam } }) {
+    apply({ params: { createAction, canCreate, dialogTitle, dialogDescription } }) {
+        if (canCreate && !canCreate(this.services)) {
+            return;
+        }
         const redirectToAction = (action) => {
-            redirect(`/odoo/action-${encodeURIComponent(action)}`);
+            redirect(`/odoo/action-${encodeURIComponent(action)}/new`);
         };
         new Promise((resolve) => {
             const message = _t("You are about to be redirected. Your changes will be saved.");
             this.services.dialog.add(ConfirmationDialog, {
-                body: message,
+                title: dialogTitle,
+                body: dialogDescription || message,
                 confirmLabel: _t("Save and Redirect"),
                 confirm: async () => {
                     await this.dependencies.savePlugin.save();
                     await this.config.closeEditor();
-                    redirectToAction(mainParam);
+                    if (typeof createAction === "function") {
+                        const path = await createAction();
+                        this.services.website.goToWebsite({ path, edition: true });
+                    } else {
+                        redirectToAction(createAction);
+                    }
                     resolve();
                 },
+                cancelLabel: _t("Stay here"),
                 cancel: () => resolve(),
             });
         });
