@@ -5,6 +5,7 @@ import {
     useAction,
     UseActions,
 } from "@mail/core/common/action";
+import { InlineAction } from "@mail/core/common/action_list";
 import { isMobileOS } from "@web/core/browser/feature_detection";
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
@@ -36,6 +37,16 @@ export const CALL_ICON_MUTED = "mic_off";
  */
 export function registerCallAction(id, definition) {
     callActionsRegistry.add(id, Object.assign(definition, { [IS_ACTION_DEFINITION_SYM]: true }));
+}
+
+/** Buttons to join or leave a call are circles unless they show their name. */
+export class JoinLeaveCallInlineAction extends InlineAction {
+    get isCircleButton() {
+        return (
+            super.isCircleButton ||
+            Boolean(this.props.inline && this.action.icon && !this.action.inlineName)
+        );
+    }
 }
 
 /** @type {CallActionDefinition} */
@@ -321,6 +332,7 @@ export const acceptWithCamera = {
     disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     name: _t("Accept with camera"),
     icon: "videocam_f",
+    inlineActionComponent: JoinLeaveCallInlineAction,
     onSelected: ({ channel, store }) => store.rtc.requestToggleCall(channel, { camera: true }),
     sequence: 100,
     sequenceGroup: 300,
@@ -337,6 +349,7 @@ registerCallAction("join-back", {
         !channel?.isSelfInCall && typeof channel?.useCameraByDefault === "boolean",
     disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     icon: ({ channel }) => (channel.useCameraByDefault ? "videocam_f" : "phone_f"),
+    inlineActionComponent: JoinLeaveCallInlineAction,
     inlineName: ({ owner }) => (owner.env.inCallInvitation ? undefined : _t("Join")),
     name: ({ channel }) => (channel?.useCameraByDefault ? _t("Join Video Call") : _t("Join Call")),
     onSelected: ({ channel, store }) =>
@@ -354,6 +367,7 @@ registerCallAction("join-with-camera", {
     disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     name: _t("Join Video Call"),
     icon: "videocam_f",
+    inlineActionComponent: JoinLeaveCallInlineAction,
     onSelected: async ({ channel, store }) => {
         if (
             (await store.rtc.requestToggleCall(channel, { camera: true })) &&
@@ -373,6 +387,7 @@ export const joinAction = {
     disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     name: _t("Join Call"),
     icon: "phone_f",
+    inlineActionComponent: JoinLeaveCallInlineAction,
     onSelected: ({ channel, store }) => store.rtc.requestToggleCall(channel),
     sequence: 130,
     sequenceGroup: 300,
@@ -389,6 +404,7 @@ export const rejectAction = {
     condition: ({ channel }) => channel?.self_member_id?.rtc_inviting_session_id,
     disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     icon: "close_small",
+    inlineActionComponent: JoinLeaveCallInlineAction,
     inlineName: ({ owner, channel }) =>
         !owner.env.inCallInvitation && typeof channel?.useCameraByDefault === "boolean"
             ? _t("Reject")
@@ -411,6 +427,7 @@ registerCallAction("disconnect", {
     disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     name: _t("Disconnect"),
     icon: "phone_f",
+    inlineActionComponent: JoinLeaveCallInlineAction,
     onSelected: ({ channel, store }) => store.rtc.toggleCall(channel),
     sequence: 150,
     sequenceGroup: 300,

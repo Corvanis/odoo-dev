@@ -1,5 +1,6 @@
 import { ACTION_TAGS } from "@mail/core/common/action";
 import { registerThreadAction } from "@mail/core/common/thread_actions";
+import { JoinLeaveCallInlineAction } from "@mail/discuss/call/common/call_actions";
 import { CallSettings } from "@mail/discuss/call/common/call_settings";
 
 import { _t } from "@web/core/l10n/translation";
@@ -10,6 +11,7 @@ registerThreadAction("call", {
     hasBtnBg: true,
     icon: "phone",
     iconClass: "oi-filled",
+    inlineActionComponent: JoinLeaveCallInlineAction,
     name: ({ channel }) => (channel?.hasRtcSessionActive ? _t("Join the Call") : _t("Start Call")),
     onSelected: ({ channel, store }) => store.rtc.requestToggleCall(channel),
     sequence: 10,
@@ -22,6 +24,7 @@ registerThreadAction("camera-call", {
     hasBtnBg: true,
     icon: "videocam",
     iconClass: "oi-filled",
+    inlineActionComponent: JoinLeaveCallInlineAction,
     name: ({ channel }) =>
         channel?.hasRtcSessionActive ? _t("Join the Call with Camera") : _t("Start Video Call"),
     onSelected: ({ channel, store }) =>
@@ -53,6 +56,7 @@ registerThreadAction("disconnect", {
     onSelected: ({ channel, store }) => store.rtc.toggleCall(channel),
     icon: "phone",
     iconClass: "oi-filled",
+    inlineActionComponent: JoinLeaveCallInlineAction,
     name: _t("Disconnect"),
     sequence: 30,
     sequenceGroup: 10,

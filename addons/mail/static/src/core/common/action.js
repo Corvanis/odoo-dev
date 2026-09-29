@@ -89,6 +89,7 @@ function toArray(val) {
  * @property {boolean|(params: ActionParams_T) => boolean} [condition=true]
  * @property {boolean|(params: ActionParams_T) => boolean} [disabledCondition]
  * @property {boolean|(params: ActionParams_T) => boolean} [dropdownTrigger]
+ * @property {typeof import("@mail/core/common/action_list").DropdownAction} [dropdownActionComponent]
  * @property {Component|(params: ActionParams_T) => Component} [dropdownComponent]
  * @property {Object|(params: ActionParams_T) => Object} [dropdownComponentProps]
  * @property {string|(params: ActionParams_T) => string} [dropdownMenuClass]
@@ -102,6 +103,7 @@ function toArray(val) {
  * @property {string|(params: ActionParams_T) => string} [hotkey]
  * @property {string|(params: ActionParams_T) => string} [icon]
  * @property {string|(params: ActionParams_T) => string} [iconClass]
+ * @property {typeof import("@mail/core/common/action_list").InlineAction} [inlineActionComponent]
  * @property {boolean|TranslatedString|((params: ActionParams_T) => boolean|TranslatedString)} [inlineName=false]
  * @property {boolean|(params: ActionParams_T) => boolean} [isActive]
  * @property {TranslatedString|((params: ActionParams_T) => TranslatedString)} [name]
@@ -401,6 +403,18 @@ export class Action {
         );
     }
 
+    /** @param {Action} action @returns {typeof import("@mail/core/common/action_list").DropdownAction|undefined} */
+    _dropdownActionComponent(action) {}
+    /**
+     * Component that renders this action in a dropdown ActionList, when it tweaks the UI of the
+     * default one (DropdownAction), which it must extend.
+     */
+    get dropdownActionComponent() {
+        return (
+            this._dropdownActionComponent(this.params) ?? this.definition.dropdownActionComponent
+        );
+    }
+
     /** @param {Action} action @returns {Component|undefined} */
     _dropdownComponent(action) {}
     /** When action is a dropdown @see dropdownTrigger, this determines an optional component to use for the content slot */
@@ -559,6 +573,16 @@ export class Action {
         return typeof this.definition.iconClass === "function"
             ? this.definition.iconClass.call(this, this.params)
             : this.definition.iconClass;
+    }
+
+    /** @param {Action} action @returns {typeof import("@mail/core/common/action_list").InlineAction|undefined} */
+    _inlineActionComponent(action) {}
+    /**
+     * Component that renders this action in an inline ActionList, when it tweaks the UI of the
+     * default one (InlineAction), which it must extend.
+     */
+    get inlineActionComponent() {
+        return this._inlineActionComponent(this.params) ?? this.definition.inlineActionComponent;
     }
 
     /** @param {Action} action @returns {string|undefined} */
