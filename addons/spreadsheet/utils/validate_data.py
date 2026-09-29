@@ -110,8 +110,7 @@ def list_order_fields(list_definition):
 
 
 def list_columns_fields(list_definition):
-    columns = list_definition["columns"]
-    return [(isinstance(columns, dict) and col["name"]) or col for col in list_definition["columns"] if isinstance(columns, dict)]
+    return [(isinstance(col, dict) and col["name"]) or col for col in list_definition["columns"]]
 
 
 def list_fields(list_definition):
