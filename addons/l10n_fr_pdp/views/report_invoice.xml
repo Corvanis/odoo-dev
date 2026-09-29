@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_invoice_document" inherit_id="l10n_fr_account.report_invoice_document">
+        <xpath expr="//div[t/@t-esc='o.partner_id.commercial_partner_id.siret']" position="replace">
+            <div class="mb-0" t-if="o.l10n_fr_is_company_french and o.partner_id.commercial_partner_id._l10n_fr_pdp_get_siren()">
+                SIREN: <t t-esc="o.partner_id.commercial_partner_id._l10n_fr_pdp_get_siren()"/>
+            </div>
+        </xpath>
+        <xpath expr="//div[t/@t-esc='o.partner_id.commercial_partner_id.siret']" position="replace">
+            <div class="mb-0" t-if="o.l10n_fr_is_company_french and o.partner_id.commercial_partner_id._l10n_fr_pdp_get_siren()">
+                SIREN: <t t-esc="o.partner_id.commercial_partner_id._l10n_fr_pdp_get_siren()"/>
+            </div>
+        </xpath>
+        <xpath expr="//div[t/@t-esc='o.partner_id.commercial_partner_id.siret']" position="replace">
+            <div class="mb-0" t-if="o.l10n_fr_is_company_french and o.partner_id.commercial_partner_id._l10n_fr_pdp_get_siren()">
+                SIREN: <t t-esc="o.partner_id.commercial_partner_id._l10n_fr_pdp_get_siren()"/>
+            </div>
+        </xpath>
+    </template>
+</odoo>
