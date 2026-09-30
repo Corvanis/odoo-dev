@@ -147,10 +147,12 @@ class SaleOrder(models.Model):
             and not so.l10n_pt_at_series_id.active
         ))
         for (company, state_sale), orders in sale_orders.grouped(lambda o: (o.company_id, o.state == 'sale')).items():
+            expected_doc_type = 'sales_order' if (state_sale or self.env.context.get('create_sales_order')) else 'quotation'
             domain = [
                 ('company_id', '=', company.id),
                 ('l10n_pt_at_series_id', '!=', False),
                 ('l10n_pt_at_series_id.active', '=', True),
+                ('l10n_pt_at_series_id.document_type', '=', expected_doc_type),
             ]
             if not state_sale and not self.env.context.get('create_sales_order'):
                 domain.append(('state', 'in', ('draft', 'sent')))
@@ -161,7 +163,7 @@ class SaleOrder(models.Model):
             orders.l10n_pt_at_series_id = last_order.l10n_pt_at_series_id or self.env['l10n_pt.at.series'].search([
                 *self.env['l10n_pt.at.series']._l10n_pt_company_domain(company),
                 ('active', '=', True),
-                ('document_type', 'in', self._l10n_pt_series_document_types()),
+                ('document_type', '=', expected_doc_type),
             ], limit=1)
 
     @api.depends('sales_order_ids')
@@ -241,6 +243,9 @@ class SaleOrder(models.Model):
         pt_orders = self.filtered(lambda o: o.country_code == 'PT')
         if not pt_orders:
             return res
+        pt_orders_to_mark = pt_orders.filtered(lambda o: not o.l10n_pt_cancelled_on)
+        if pt_orders_to_mark:
+            pt_orders_to_mark.write({'l10n_pt_cancelled_on': fields.Datetime.now()})
         # The AT requires a reason to be recorded for every cancelled document.
         action = self.env['ir.actions.actions']._for_xml_id('l10n_pt_certification.action_l10n_pt_cancel')
         action['context'] = {
@@ -309,7 +314,7 @@ class SaleOrder(models.Model):
 
     def _l10n_pt_get_document_date(self):
         self.ensure_one()
-        return self.date_order
+        return self._l10n_pt_local_date(self.date_order)
 
     def _l10n_pt_get_document_type(self):
         self.ensure_one()
@@ -350,13 +355,13 @@ class SaleOrder(models.Model):
         return self.sudo().search([
             ('l10n_pt_at_series_id', '=', at_series.id),
             ('l10n_pt_inalterable_hash', '!=', False),
-        ], order='l10n_pt_document_number desc', limit=1)
+        ], order='l10n_pt_sequence_number desc, id desc', limit=1)
 
     def _l10n_pt_get_unhashed_records(self, at_series):
         return self.sudo().search([
             ('l10n_pt_at_series_id', '=', at_series.id),
             ('l10n_pt_inalterable_hash', '=', False),
-        ], order='l10n_pt_document_number')
+        ], order='l10n_pt_sequence_number asc, id asc')
 
     def _l10n_pt_post_hash_hook(self):
         self.locked = True

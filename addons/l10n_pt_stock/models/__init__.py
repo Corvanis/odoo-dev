@@ -4,3 +4,4 @@ from . import res_company
 from . import res_partner
 from . import res_product
 from . import stock_picking
+from . import l10n_pt_saft_export_wizard

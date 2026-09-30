@@ -314,3 +314,26 @@ class TestL10nPtSaleMiscRequirements(TestL10nPtSaleCommon):
              'amount_tax': 386.66,
              'amount_total': 2067.79,
          })
+
+
+@freeze_time('2024-06-15')
+@tagged('post_install_l10n', 'post_install', '-at_install')
+class TestL10nPtSaleSaft(TestL10nPtSaleCommon):
+    def test_l10n_pt_sale_saft_export(self):
+        """Test that SAF-T export runs with l10n_pt_sale installed and working documents."""
+        from odoo.addons.l10n_pt_certification.wizard import l10n_pt_saft_export_wizard as wm
+        with self._mock_sign_records(), \
+             patch.object(wm, 'PT_PRODUCER_VAT', '599999993'), \
+             patch.object(wm, 'PT_CERTIFICATION_NUMBER', '1234'):
+            so = self.create_sales_order('2024-01-02', do_hash=True)
+            self.assertTrue(so.l10n_pt_document_number)
+            wizard = self.env['l10n_pt.saft.export.wizard'].create({
+                'company_id': self.company_pt.id,
+                'date_from': '2024-01-01',
+                'date_to': '2024-01-31',
+                'type': 'F',
+            })
+            wizard.action_export_saft()
+            self.assertTrue(wizard.export_file, "SAF-T file binary must be generated when l10n_pt_sale is installed.")
+
+

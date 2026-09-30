@@ -67,6 +67,11 @@ class StockPicking(models.Model):
         tracking=True,
         help="Date and time of start of transport",
     )
+    l10n_pt_at_doc_code = fields.Char(
+        string="AT Document Code",
+        copy=False,
+        help="Official code returned by the Tax Authority upon communication of the transport document (ATDocCodeID).",
+    )
     l10n_pt_show_no_at_series_warning = fields.Boolean(compute='_compute_l10n_pt_show_no_at_series_warning')
 
     ####################################
@@ -90,6 +95,13 @@ class StockPicking(models.Model):
         picking = super().button_validate()
         self.filtered(lambda p: p.country_code == 'PT' and p.state == 'done')._check_l10n_pt_dates()
         return picking
+
+    def action_cancel(self):
+        res = super().action_cancel()
+        pt_pickings = self.filtered(lambda p: p.country_code == 'PT' and p.l10n_pt_document_number and not p.l10n_pt_cancelled_on)
+        if pt_pickings:
+            pt_pickings.write({'l10n_pt_cancelled_on': fields.Datetime.now()})
+        return res
 
     ####################################
     # MISC REQUIREMENTS
@@ -122,7 +134,8 @@ class StockPicking(models.Model):
         # numbered at confirmation, so it still has to be signed. Fall back to the transport date,
         # which always has a value. Transfers that were validated keep signing `date_done`, so no
         # existing signature changes.
-        return self.date_done or self.l10n_pt_start_transport_date
+        dt = self.date_done or self.l10n_pt_start_transport_date
+        return self._l10n_pt_local_date(dt)
 
     def _l10n_pt_get_document_number(self):
         return super()._l10n_pt_get_document_number()
@@ -158,7 +171,7 @@ class StockPicking(models.Model):
             ('l10n_pt_at_series_id', '=', at_series.id),
             ('picking_type_code', '=', at_series.document_type),
             ('l10n_pt_inalterable_hash', '!=', False),
-        ], order='l10n_pt_document_number desc', limit=1)
+        ], order='l10n_pt_sequence_number desc, id desc', limit=1)
 
     def _l10n_pt_get_unhashed_records(self, at_series):
         return self.sudo().search([
@@ -168,7 +181,7 @@ class StockPicking(models.Model):
             # the chain and is reported as cancelled -- same treatment as a cancelled invoice.
             ('state', 'in', ('done', 'cancel')),
             ('l10n_pt_inalterable_hash', '=', False),
-        ], order='l10n_pt_document_number')
+        ], order='l10n_pt_sequence_number asc, id asc')
 
     def _l10n_pt_validate_before_hash(self):
         for picking in self:

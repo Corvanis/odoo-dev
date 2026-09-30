@@ -2,7 +2,7 @@ from odoo import api, models
 
 
 class ReportStockPickingDeliverySlip(models.AbstractModel):
-    _inherit = 'report.stock.report_deliveryslip'
+    _name = 'report.stock.report_deliveryslip'
     _description = 'Stock delivery slip report'
 
     @api.model

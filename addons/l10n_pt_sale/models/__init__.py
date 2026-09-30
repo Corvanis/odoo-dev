@@ -5,3 +5,4 @@ from . import res_company
 from . import res_partner
 from . import res_product
 from . import sale_order
+from . import l10n_pt_saft_export_wizard
