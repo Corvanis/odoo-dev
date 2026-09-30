@@ -1,5 +1,7 @@
 import re
 import urllib.parse
+from datetime import date, datetime
+import pytz
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
@@ -8,6 +10,12 @@ from odoo.tools import float_repr
 from odoo.addons.l10n_pt_certification.utils import hashing as pt_hash_utils
 
 L10N_PT_DOCUMENT_NUMBER_RE = r'^[^ ]+ [^/^ ]+/[0-9]+$'
+
+_L10N_PT_TZ = {
+    'PT': 'Europe/Lisbon',
+    'PT-MA': 'Atlantic/Madeira',
+    'PT-AC': 'Atlantic/Azores',
+}
 
 
 class L10nPtDocumentMixin(models.AbstractModel):
@@ -77,6 +85,12 @@ class L10nPtDocumentMixin(models.AbstractModel):
         readonly=True,
         help="Reason given by the user for cancelling this document.",
     )
+    l10n_pt_cancelled_on = fields.Datetime(
+        string="Cancelled On",
+        copy=False,
+        readonly=True,
+        help="Timestamp when the document was cancelled.",
+    )
     l10n_pt_show_future_date_warning = fields.Boolean(compute='_compute_l10n_pt_show_future_date_warning')
     l10n_pt_at_series_missing_at_code = fields.Boolean(
         string='AT Series missing validation code',
@@ -143,7 +157,8 @@ class L10nPtDocumentMixin(models.AbstractModel):
     def _compute_l10n_pt_atcud(self):
         for record in self:
             if record._l10n_pt_country_ok() and not record.l10n_pt_atcud and record.l10n_pt_document_number:
-                record.l10n_pt_atcud = f"{record.l10n_pt_at_series_id._get_at_code()}-{record._l10n_pt_get_sequence_number()}"
+                record_date = fields.Date.to_date(record._l10n_pt_get_document_date())
+                record.l10n_pt_atcud = f"{record.l10n_pt_at_series_id._get_at_code(date=record_date)}-{record._l10n_pt_get_sequence_number()}"
             else:
                 record.l10n_pt_atcud = record.l10n_pt_atcud or False
 
@@ -199,6 +214,27 @@ class L10nPtDocumentMixin(models.AbstractModel):
                     "requirements.", number
                 ))
 
+    def _l10n_pt_local_date(self, dt=None):
+        """
+        Convert a datetime (or current time) to the company's Portuguese timezone and return the date.
+        Ensures that document dates, issue dates, and signature verification are deterministic
+        and independent of the user's or worker's session timezone.
+        """
+        self.ensure_one()
+        region = self.company_id.l10n_pt_region_code or 'PT'
+        tz = pytz.timezone(_L10N_PT_TZ.get(region, 'Europe/Lisbon'))
+        if dt is None:
+            return pytz.utc.localize(fields.Datetime.now()).astimezone(tz).date()
+        if isinstance(dt, str):
+            dt = fields.Datetime.to_datetime(dt)
+        if isinstance(dt, datetime):
+            if dt.tzinfo is None:
+                dt = pytz.utc.localize(dt)
+            return dt.astimezone(tz).date()
+        if isinstance(dt, date):
+            return dt
+        return fields.Date.today()
+
     def update_l10n_pt_print_version(self):
         for record in self.filtered(lambda r: r._l10n_pt_country_ok()):
             record.l10n_pt_print_version = 'reprint' if record.l10n_pt_print_version else 'original'
@@ -209,8 +245,8 @@ class L10nPtDocumentMixin(models.AbstractModel):
         No other document may be issued with the current or previous date within the same series as
         a document issued in the future, so warn as soon as a future date is entered.
         """
-        today = fields.Date.today()
         for record in self:
+            today = record._l10n_pt_local_date() if record._l10n_pt_country_ok() else fields.Date.today()
             document_date = record._l10n_pt_country_ok() and record._l10n_pt_get_document_date()
             record.l10n_pt_show_future_date_warning = bool(
                 document_date
@@ -252,11 +288,23 @@ class L10nPtDocumentMixin(models.AbstractModel):
             max_document_date = max_date_per_series.get(record.l10n_pt_at_series_id)
             document_date = record._l10n_pt_get_document_date()
             if max_document_date and document_date and document_date < max_document_date:
-                raise UserError(self.env._(
-                    "You cannot issue a document dated earlier than the last document issued in this "
-                    "AT series (%(series)s).",
-                    series=record.l10n_pt_at_series_id.display_name,
-                ))
+                if record._name == 'account.move':
+                    raise UserError(self.env._(
+                        "You cannot create an invoice with a date earlier than the date of the last invoice issued in this AT series (%(series)s).",
+                        series=record.l10n_pt_at_series_id.display_name,
+                    ))
+                elif record._name == 'account.payment':
+                    raise UserError(self.env._(
+                        "You cannot create a payment with a date earlier than the date of the last payment issued in this AT series (%(series)s).",
+                        series=record.l10n_pt_at_series_id.display_name,
+                    ))
+                else:
+                    doc_name = self.env._("order") if record._name == 'sale.order' else self.env._("document")
+                    raise UserError(self.env._(
+                        "You cannot create a %(doc_name)s with a date earlier than the date of the last %(doc_name)s issued in this AT series (%(series)s).",
+                        doc_name=doc_name,
+                        series=record.l10n_pt_at_series_id.display_name,
+                    ))
 
     def _check_l10n_pt_at_series_id(self):
         for record in self.filtered(lambda r: r._l10n_pt_country_ok()):
@@ -265,9 +313,10 @@ class L10nPtDocumentMixin(models.AbstractModel):
             series = record.l10n_pt_at_series_id
             if record.l10n_pt_document_type and record.l10n_pt_document_type != series.document_type:
                 raise UserError(self.env._("The series does not match the document type."))
-            record_date = fields.Date.to_date(record._l10n_pt_get_document_date())
-            if not series.active or not series._l10n_pt_is_valid_on(record_date):
+            doc_date = fields.Date.to_date(record._l10n_pt_get_document_date())
+            if not series._l10n_pt_is_valid_on(doc_date):
                 raise UserError(self.env._("An inactive series cannot be used."))
+
 
 
 class L10nPtHashedDocumentMixin(models.AbstractModel):
@@ -305,6 +354,23 @@ class L10nPtHashedDocumentMixin(models.AbstractModel):
         compute='_compute_l10n_pt_qr_code_str',
         store=True,
     )
+
+    # Stored integer sequence number for numeric sorting across digit boundaries
+    l10n_pt_sequence_number = fields.Integer(
+        string="Sequence Number",
+        compute="_compute_l10n_pt_sequence_number",
+        store=True,
+        index=True,
+    )
+
+    @api.depends('l10n_pt_document_number')
+    def _compute_l10n_pt_sequence_number(self):
+        for record in self:
+            if record.l10n_pt_document_number:
+                match = re.search(r'/([0-9]+)$', record.l10n_pt_document_number)
+                record.l10n_pt_sequence_number = int(match.group(1)) if match else 0
+            else:
+                record.l10n_pt_sequence_number = 0
 
     ####################################
     # HOOKS (to be implemented by models)
@@ -373,14 +439,16 @@ class L10nPtHashedDocumentMixin(models.AbstractModel):
     def _calculate_hashes(self, previous_hash=None):
         if not self or not self[0]._l10n_pt_country_ok():
             return {}
-        self.l10n_pt_hashed_on = fields.Datetime.now()
+        for record in self:
+            if not record.l10n_pt_hashed_on and not record.l10n_pt_inalterable_hash:
+                record.l10n_pt_hashed_on = fields.Datetime.now()
         docs_to_sign = [{
             'id': record.id,
             # The chain follows the series' numbering, not the document date: dates tie routinely
             # (a batch of transfers validated together shares one `date_done`).
             'sorting_key': record._l10n_pt_get_sequence_number(),
             'date': record._l10n_pt_get_document_date().strftime('%Y-%m-%d'),
-            'system_entry_date': record.l10n_pt_hashed_on.isoformat(timespec='seconds'),
+            'system_entry_date': (record.l10n_pt_hashed_on or record.create_date or fields.Datetime.now()).isoformat(timespec='seconds'),
             'name': record._l10n_pt_get_document_number(),
             'gross_total': float_repr(record._l10n_pt_get_gross_total(), precision_digits=2),
             'previous_signature': previous_hash,
@@ -457,7 +525,11 @@ class L10nPtHashedDocumentMixin(models.AbstractModel):
             and r.l10n_pt_inalterable_hash
             and not r.l10n_pt_qr_code_str  # Skip if already computed
         )):
-            record.l10n_pt_verify_prerequisites_qr_code()
+            try:
+                record.l10n_pt_verify_prerequisites_qr_code()
+            except UserError:
+                record.l10n_pt_qr_code_str = False
+                continue
             # Most of the values needed to create the QR code string are filled in pt_hash_utils
             qr_code_dict, tax_letter = pt_hash_utils.l10n_pt_common_qr_code_str(record, self.env, record._l10n_pt_get_document_date())
             qr_code_dict['D:'] = f"{record._l10n_pt_get_saft_doc_type()}*"

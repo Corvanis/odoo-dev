@@ -20,13 +20,13 @@ class TestL10nPtMiscRequirements(TestL10nPtCommon):
         follows this format: [^ ]+ [^/^ ]+/[0-9]+
         """
         for (move_type, date, expected) in [
-            ('out_invoice', '2024-01-01', 'INV 2024/00001'),
-            ('out_invoice', '2024-01-02', 'INV 2024/00002'),
+            ('out_invoice', '2024-01-01', 'FT 2024/00001'),
+            ('out_invoice', '2024-01-02', 'FT 2024/00002'),
             ('in_invoice', '2024-01-01', False),
-            ('out_invoice', '2024-01-03', 'INV 2024/00003'),
+            ('out_invoice', '2024-01-03', 'FT 2024/00003'),
             ('out_refund', '2024-01-01', 'RINV 2024/00001'),
             ('in_refund', '2024-01-01', False),
-            ('out_invoice', '2024-01-04', 'INV 2024/00004'),
+            ('out_invoice', '2024-01-04', 'FT 2024/00004'),
             ('in_refund', '2024-01-02', False),
         ]:
             move = self.create_invoice(move_type, date)
@@ -79,7 +79,7 @@ class TestL10nPtMiscRequirements(TestL10nPtCommon):
         """
         Test that invoices without taxes or non-positive lines cannot be posted
         """
-        with self.assertRaisesRegex(UserError, "You cannot create a move line without VAT tax."):
+        with self.assertRaisesRegex(UserError, "You cannot create an invoice line without VAT tax."):
             move = self.env['account.move'].with_company(self.company_pt).create({
                 'company_id': self.company_pt.id,
                 'move_type': 'out_invoice',
@@ -233,7 +233,7 @@ class TestL10nPtMiscRequirements(TestL10nPtCommon):
         move.action_post()
         self.assertInvoiceValues(move, [
             {
-                'price_unit': 1234.57,
+                'price_unit': 1234.568,
                 'price_subtotal': 1000.00,  # 10% global discount + 10% line discount
                 'price_total': 1230.00,
                 'debit': 0.0,
@@ -302,48 +302,50 @@ class TestL10nPtHashDomain(TestL10nPtCommon):
     def test_l10n_pt_hash_inalterability(self):
         expected_error_msg = "This document is protected by a hash. Therefore, you cannot edit the following fields:*"
 
-        out_invoice = self.create_invoice(invoice_date='2024-01-01', do_hash=True)
-        out_invoice.flush_recordset()
-        with self.assertRaisesRegex(UserError, expected_error_msg):
-            out_invoice.inalterable_hash = 'fake_hash'
-        with self.assertRaisesRegex(UserError, expected_error_msg):
-            out_invoice.invoice_date = fields.Date.from_string('2000-01-01')
-        with self.assertRaisesRegex(UserError, expected_error_msg):
-            out_invoice.l10n_pt_hashed_on = fields.Datetime.now()
-        with self.assertRaisesRegex(UserError, expected_error_msg):
-            out_invoice.amount_total_signed = 666
-        with self.assertRaisesRegex(UserError, expected_error_msg):
-            out_invoice.name = "new name"
-        with self.assertRaisesRegex(UserError, expected_error_msg):
-            out_invoice.l10n_pt_document_number = "new number/0001"
+        with self._mock_sign_records():
+            out_invoice = self.create_invoice(invoice_date='2024-01-01', do_hash=True)
+            out_invoice.flush_recordset()
+            with self.assertRaisesRegex(UserError, expected_error_msg):
+                out_invoice.inalterable_hash = 'fake_hash'
+            with self.assertRaisesRegex(UserError, expected_error_msg):
+                out_invoice.invoice_date = fields.Date.from_string('2000-01-01')
+            with self.assertRaisesRegex(UserError, expected_error_msg):
+                out_invoice.l10n_pt_hashed_on = fields.Datetime.now()
+            with self.assertRaisesRegex(UserError, expected_error_msg):
+                out_invoice.amount_total_signed = 666
+            with self.assertRaisesRegex(UserError, expected_error_msg):
+                out_invoice.name = "new name"
+            with self.assertRaisesRegex(UserError, expected_error_msg):
+                out_invoice.l10n_pt_document_number = "new number/0001"
 
-        # The following field is not part of the hash so it can be modified
-        out_invoice.ref = 'new ref'
+            # The following field is not part of the hash so it can be modified
+            out_invoice.ref = 'new ref'
 
     def test_l10n_pt_move_hash_integrity_report(self):
         """Test the hash integrity report"""
         # Reminder: we have at least one chain per move_type in Portugal
-        out_invoice1 = self.create_invoice(invoice_date='2024-01-01', do_hash=True)
-        self.create_invoice(invoice_date='2024-01-02', do_hash=True)
-        out_invoice3 = self.create_invoice(invoice_date='2024-01-03', do_hash=True)
-        out_invoice4 = self.create_invoice(invoice_date='2024-01-04', do_hash=True)
+        with self._mock_sign_records():
+            out_invoice1 = self.create_invoice(invoice_date='2024-01-01', do_hash=True)
+            self.create_invoice(invoice_date='2024-01-02', do_hash=True)
+            out_invoice3 = self.create_invoice(invoice_date='2024-01-03', do_hash=True)
+            out_invoice4 = self.create_invoice(invoice_date='2024-01-04', do_hash=True)
 
-        integrity_check = self.company_pt._check_hash_integrity()['results'][0]  # [0] = 'out_invoice'
-        self.assertEqual(integrity_check['status'], 'verified')
-        self.assertRegex(integrity_check['msg_cover'], 'Entries are correctly hashed')
-        self.assertEqual(integrity_check['first_move_date'], format_date(self.env, out_invoice1.date))
-        self.assertEqual(integrity_check['last_move_date'], format_date(self.env, out_invoice4.date))
+            integrity_check = self.company_pt._check_hash_integrity()['results'][0]  # [0] = 'out_invoice'
+            self.assertEqual(integrity_check['status'], 'verified')
+            self.assertRegex(integrity_check['msg_cover'], 'Entries are correctly hashed')
+            self.assertEqual(integrity_check['first_move_date'], format_date(self.env, out_invoice1.date))
+            self.assertEqual(integrity_check['last_move_date'], format_date(self.env, out_invoice4.date))
 
-        # Let's change one of the fields used by the hash. It should be detected by the integrity report.
-        # We need to bypass the write method of account.move to do so.
-        Model.write(out_invoice3, {'invoice_date': fields.Date.from_string('2024-01-07')})
-        integrity_check = self.company_pt._check_hash_integrity()['results'][0]
-        self.assertEqual(integrity_check['status'], 'corrupted')
-        self.assertEqual(integrity_check['msg_cover'], f'Corrupted data on journal entry with id {out_invoice3.id} ({out_invoice3.name}).')
+            # Let's change one of the fields used by the hash. It should be detected by the integrity report.
+            # We need to bypass the write method of account.move to do so.
+            Model.write(out_invoice3, {'invoice_date': fields.Date.from_string('2024-01-07')})
+            integrity_check = self.company_pt._check_hash_integrity()['results'][0]
+            self.assertEqual(integrity_check['status'], 'corrupted')
+            self.assertEqual(integrity_check['msg_cover'], f'Corrupted data on journal entry with id {out_invoice3.id} ({out_invoice3.name}).')
 
-        # Let's try with the inalterable_hash field itself
-        Model.write(out_invoice3, {'invoice_date': fields.Date.from_string("2024-01-03")})  # Revert the previous change
-        Model.write(out_invoice4, {'inalterable_hash': 'fake_hash'})
-        integrity_check = self.company_pt._check_hash_integrity()['results'][0]
-        self.assertEqual(integrity_check['status'], 'corrupted')
-        self.assertEqual(integrity_check['msg_cover'], f'Corrupted data on journal entry with id {out_invoice4.id} ({out_invoice4.name}).')
+            # Let's try with the inalterable_hash field itself
+            Model.write(out_invoice3, {'invoice_date': fields.Date.from_string("2024-01-03")})  # Revert the previous change
+            Model.write(out_invoice4, {'inalterable_hash': 'fake_hash'})
+            integrity_check = self.company_pt._check_hash_integrity()['results'][0]
+            self.assertEqual(integrity_check['status'], 'corrupted')
+            self.assertEqual(integrity_check['msg_cover'], f'Corrupted data on journal entry with id {out_invoice4.id} ({out_invoice4.name}).')

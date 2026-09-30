@@ -93,8 +93,8 @@
         </xpath>
 
         <!-- Hide the per-section subtotal for PT and keep the table aligned with the accumulated column -->
-        <xpath expr="//td[@name='td_section_subtotal']" position="replace">
-            <td name="td_section_subtotal" colspan="1" class="text-end o_price_total">
+        <xpath expr="//span[@t-out='section_subtotal']/parent::td" position="replace">
+            <td colspan="1" class="text-end o_price_total">
                 <span t-if="o.company_id.account_fiscal_country_id.code != 'PT'"
                       t-out="section_subtotal" class="text-nowrap"
                       t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
@@ -111,7 +111,7 @@
         <xpath expr="//div[@name='reference']" position="after">
             <div class="col" t-if="o.name and o.name != '/'" name="internal_number">
                 <strong>Internal Number</strong>
-                <div t-field="o.name">INV/2023/00001</div>
+                <div t-field="o.name">FT 2023/00001</div>
             </div>
         </xpath>
 

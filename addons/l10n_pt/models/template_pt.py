@@ -45,9 +45,10 @@ class AccountChartTemplate(models.AbstractModel):
             if 'bank' in vals:
                 vals['bank']['default_account_id'] = 'chart_12'
             # Different AT Series are needed for invoices and refunds. For consistency, have a dedicated sequence
-            # for refunds by default.
+            # for refunds by default, and use official Portuguese document code FT.
             if 'sale' in vals:
                 vals['sale']['refund_sequence'] = True
+                vals['sale']['code'] = 'FT'
         return vals
 
     @template('pt', 'account.account')

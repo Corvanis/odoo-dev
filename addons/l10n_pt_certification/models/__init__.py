@@ -3,6 +3,7 @@ from . import l10n_pt_priced_document_mixin
 from . import account_journal
 from . import account_move
 from . import account_move_send
+from . import account_partial_reconcile
 from . import account_payment
 from . import account_payment_method
 from . import account_tax

@@ -54,3 +54,15 @@ class AccountPaymentRegister(models.TransientModel):
         payment_vals = super()._create_payment_vals_from_batch(batch_result)
         payment_vals['l10n_pt_at_series_id'] = self.l10n_pt_at_series_id.id
         return payment_vals
+
+    def _reconcile_payments(self, to_process, edit_mode=False):
+        # OVERRIDE: snapshot settled documents after reconciliation so PT receipts retain invoice links
+        res = super()._reconcile_payments(to_process, edit_mode=edit_mode)
+        for vals in to_process:
+            payment = vals.get('payment')
+            if payment and payment.is_pt_inbound() and not payment.l10n_pt_settled_documents:
+                settled = payment._l10n_pt_get_settled_documents()
+                if settled:
+                    payment.l10n_pt_settled_documents = settled
+        return res
+

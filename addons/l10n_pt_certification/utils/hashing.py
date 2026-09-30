@@ -15,7 +15,6 @@ from odoo.addons.l10n_pt_certification.const import PT_CERTIFICATION_NUMBER
 
 _lt = LazyTranslate(__name__)
 
-
 SIGN_DEFAULT_ENDPOINT = 'https://l10n-pt.api.odoo.com/api/l10n_pt/1'
 ERROR_MESSAGES = {
     "error_connecting_iap": _lt("Unable to connect to the IAP endpoint to sign the documents. Please try later. If the problem persists, please contact Odoo support."),
@@ -101,6 +100,23 @@ def verify_prerequisites_qr_code(record, hash_value, atcud):
         raise UserError(error_msg)
 
 
+def l10n_pt_get_partner_tax_id(partner):
+    """
+    Format partner VAT for Portuguese AT documents (SAF-T CustomerTaxID and QR field B).
+    - Domestic PT VAT: 9 digits without country prefix (e.g. 501234567)
+    - Foreign intra-community / non-PT VAT: retain country prefix/alphanumeric code (e.g. ESB12345678)
+    - Final consumer / empty VAT: 999999990
+    """
+    if not partner or not partner.vat:
+        return '999999990'
+    raw_vat = partner.vat.strip().replace(' ', '').upper()
+    if raw_vat.startswith('PT'):
+        return re.sub(r'\D', '', raw_vat[2:])
+    if partner.country_id and partner.country_id.code == 'PT':
+        return re.sub(r'\D', '', raw_vat)
+    return raw_vat
+
+
 def l10n_pt_common_qr_code_str(record, env, date):
     """
     Generate the partial values needed to construct the QR code for Portugal.
@@ -111,8 +127,8 @@ def l10n_pt_common_qr_code_str(record, env, date):
     :param date: The date required in the QR code, can be move.date, pos.date_order or picking.date_done
     :return: Dictionary containing some of the values needed for the QR code string, and the correct tax_letter per record
     """
-    company_vat = re.sub(r'\D', '', record.company_id.vat)
-    partner_vat = re.sub(r'\D', '', record.partner_id.vat or '999999990')
+    company_vat = re.sub(r'\D', '', record.company_id.vat or '')
+    partner_vat = l10n_pt_get_partner_tax_id(record.partner_id)
 
     if record.company_id.l10n_pt_region_code == 'PT-AC':
         tax_letter = 'J'
@@ -121,14 +137,18 @@ def l10n_pt_common_qr_code_str(record, env, date):
     else:
         tax_letter = 'I'
 
+    # Customer country code follows SAF-T Customer Country (max 12 chars), defaulting to 'Desconhecido'
+    country_code = (record.partner_id.country_id.code if record.partner_id and record.partner_id.country_id else 'Desconhecido')[:12]
+
     qr_code_dict = {}
     qr_code_dict['A:'] = f"{company_vat}*"
     qr_code_dict['B:'] = f"{partner_vat}*"
-    qr_code_dict['C:'] = f"{record.partner_id.country_id.code if record.partner_id and record.partner_id.country_id else 'Desconhecido'}*"
+    qr_code_dict['C:'] = f"{country_code}*"
     qr_code_dict['E:'] = f"{'A' if record.state == 'cancel' else 'N'}*"
     qr_code_dict['F:'] = f"{format_date(env, date, date_format='yyyyMMdd')}*"
     qr_code_dict['G:'] = f"{record.l10n_pt_document_number}*"
-    qr_code_dict[f'{tax_letter}1:'] = f"{record.company_id.l10n_pt_region_code}*"
+    qr_code_dict[f'{tax_letter}1:'] = f"{record.company_id.l10n_pt_region_code or 'PT'}*"
     qr_code_dict['R:'] = f"{PT_CERTIFICATION_NUMBER}"
 
     return qr_code_dict, tax_letter
+

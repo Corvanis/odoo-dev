@@ -60,8 +60,8 @@ class AccountChartTemplate(models.AbstractModel):
             ], limit=1)
 
             at_series_document_data = [
-                ('out_invoice', 'INV', sale_journal),
-                ('out_refund', 'RINV', sale_journal),
+                ('out_invoice', 'FT', sale_journal),
+                ('out_refund', 'NC', sale_journal),
                 ('payment_receipt', 'RG', bank_journal),
             ]
             at_series_demo_data = {

@@ -143,7 +143,7 @@ class TestL10nPtFlows(TestL10nPtCommon):
             'prefix': 'FUT',
             'at_code': 'AT-TESTFUT2025',
         })
-        self.assertTrue(early_series.active)
+        self.assertFalse(early_series.active)
         invoice.l10n_pt_at_series_id = early_series
         with self.assertRaisesRegex(UserError, "An inactive series cannot be used"):
             invoice.action_post()
@@ -352,7 +352,7 @@ class TestL10nPtFlows(TestL10nPtCommon):
         self.assertIn('$1$', invoice.inalterable_hash)
         self.assertEqual(invoice.l10n_pt_inalterable_hash_version, 1)
         self.assertEqual(invoice.l10n_pt_inalterable_hash_short, 'AAAA')
-        self.assertEqual(invoice.l10n_pt_atcud, 'AT-TESTINV2024-1')
+        self.assertEqual(invoice.l10n_pt_atcud, 'AT-TESTFT2024-1')
 
     def test_atcud_not_computed_without_hash(self):
         invoice = self.create_invoice('out_invoice')
@@ -506,7 +506,8 @@ class TestL10nPtFlows(TestL10nPtCommon):
     def test_sales_receipt_limits(self):
         """ A sales receipt's amount must be below a certain limit depending on if product is goods or service """
         good = self.product_a
-        service = self.product_a.copy({'type': 'service'})
+        good.type = 'consu'
+        service = self.env['product.product'].create({'name': 'Service Product', 'type': 'service'})
 
         with self.assertRaisesRegex(UserError, "A sales receipt.*cannot exceed.*EUR"):
             self.create_invoice('out_receipt', amount=PT_SIMPLIFIED_INVOICE_SERVICES_LIMIT + 1, product_id=service.id)
@@ -685,3 +686,4 @@ class TestL10nPtFlows(TestL10nPtCommon):
         invoice.invoice_line_ids.l10n_pt_line_discount = 10.0
         self.assertAlmostEqual(invoice.invoice_line_ids.discount, 19.0)
         self.assertAlmostEqual(invoice.invoice_line_ids.price_subtotal, 810.0)
+

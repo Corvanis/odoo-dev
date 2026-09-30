@@ -28,7 +28,7 @@
                     ATCUD: <span t-field="o.l10n_pt_atcud">0</span>
                 </div>
                 <div name="internal_name" class="col-6">
-                    Internal Number: <span t-field="o.name">INV0001</span>
+                    Internal Number: <span t-field="o.name">FT0001</span>
                 </div>
             </div>
         </xpath>

@@ -1,3 +1,4 @@
+from collections import defaultdict
 import json
 import re
 import urllib.parse
@@ -5,7 +6,7 @@ import urllib.parse
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Domain
-from odoo.tools import float_repr
+from odoo.tools import float_compare, float_repr
 
 from odoo.addons.l10n_pt_certification.const import (
     PT_SIMPLIFIED_INVOICE_GOODS_LIMIT,
@@ -40,10 +41,11 @@ class AccountMoveLine(models.Model):
     def _check_l10n_pt_zero_negative_lines(self):
         """ Lines with a total amount <= 0 are not allowed, according to PT requirements """
         if non_positive_lines := self.filtered(
-            lambda l: l.display_type == 'product'
-            and l.move_type != 'entry'
+            lambda l: l.display_type in ('product', False)
+            and l.move_id.is_sale_document(include_receipts=True)
             and l.company_id.account_fiscal_country_id.code == 'PT'
-            and (l.price_total <= 0.0 and not l.is_downpayment)
+            and (l.move_id.l10n_pt_at_series_id or l.move_id.state == 'posted')
+            and (l.price_total <= 0.0 and not getattr(l, 'is_downpayment', False))
         ):
             if any(line.price_total < 0.0 for line in non_positive_lines):
                 raise ValidationError(self.env._("You cannot create an invoice with negative lines on it. "
@@ -94,7 +96,7 @@ class AccountMove(models.Model):
 
     def _l10n_pt_get_document_date(self):
         self.ensure_one()
-        return self.invoice_date or self.date or fields.Date.context_today(self)
+        return self.invoice_date or self.date or self._l10n_pt_local_date()
 
     def _l10n_pt_get_document_type(self):
         self.ensure_one()
@@ -141,7 +143,11 @@ class AccountMove(models.Model):
         """Cannot cancel an already reversed or cancelled invoice"""
         if self.filtered(lambda m: m.country_code == "PT" and (m.payment_state == 'reversed' or m.state == 'cancel')):
             raise UserError(self.env._("You cannot cancel an invoice that has already been fully reversed or cancelled."))
-        return super(AccountMove, self.with_context(_pt_button_cancel=True)).button_cancel()
+        res = super(AccountMove, self.with_context(_pt_button_cancel=True)).button_cancel()
+        pt_moves = self.filtered(lambda m: m.country_code == "PT" and m.l10n_pt_document_number and not m.l10n_pt_cancelled_on)
+        if pt_moves:
+            pt_moves.write({'l10n_pt_cancelled_on': fields.Datetime.now()})
+        return res
 
     def action_reverse(self):
         """Cannot reverse an already reversed or cancelled invoice"""
@@ -255,7 +261,11 @@ class AccountMove(models.Model):
                 standard = 'S' + standard
             elif self.l10n_pt_document_type == 'out_invoice_receipt':
                 standard = 'REC' + standard
-            if re.match(r'^[A-Z0-9]+/\d.+/\d+$', standard):  # "INV/2026/00000" → "INV 2026/00000"
+            elif self.l10n_pt_document_type == 'out_invoice' and standard.startswith('INV'):
+                standard = 'FT' + standard[3:]
+            elif self.l10n_pt_document_type == 'out_refund' and standard.startswith('RINV'):
+                standard = 'NC' + standard[4:]
+            if re.match(r'^[A-Z0-9]+/\d.+/\d+$', standard):  # "FT/2026/00000" → "FT 2026/00000"
                 return standard.replace('/', ' ', 1)
             return standard
         return super()._get_starting_sequence()
@@ -277,6 +287,14 @@ class AccountMove(models.Model):
             move._check_l10n_pt_at_series_id()
 
         pt_moves._check_l10n_pt_dates()
+        if pt_moves:
+            future_hashed = self.env['account.move'].sudo().search([
+                ('company_id', 'in', pt_moves.mapped('company_id').ids),
+                ('l10n_pt_hashed_on', '>', fields.Datetime.now()),
+                ('inalterable_hash', '!=', False),
+            ], limit=1)
+            if future_hashed:
+                raise UserError(self.env._("There are secured invoices with a signing date ahead of the present time."))
         pt_moves._set_l10n_pt_document_number()
         pt_moves._check_l10n_pt_reversal()
         return super()._post(soft)
@@ -291,7 +309,7 @@ class AccountMove(models.Model):
             raise ValidationError(self.env._(
                 "The document number (%s) is invalid. It must start with the internal code of the document type, "
                 "a space, the name of the series followed by a single slash and the number of the "
-                "document within the series (e.g. INV 2025A/1).",
+                "document within the series (e.g. FT 2025A/1).",
                 self.name
             ))
 
@@ -304,13 +322,16 @@ class AccountMove(models.Model):
         if not self._l10n_pt_country_ok() or self.move_type != 'out_receipt':
             return
 
+        lines = self.invoice_line_ids.filtered(lambda l: l.display_type in ('product', False))
+        raw_total = abs(self.amount_total)
+        if not raw_total:
+            raw_total = sum(abs(l.price_total or (l.price_unit * l.quantity)) for l in lines)
         total_amount_in_eur = self.currency_id._convert(
-            self.amount_total,
+            raw_total,
             self.env.ref('base.EUR'),
             self.company_id,
-            self.invoice_date or fields.Date.context_today(self)
+            self.invoice_date or self._l10n_pt_local_date()
         )
-        # If product has no type or its tax has no tax_scope, it is considered a service to be safe
         has_services = any(
             (
                 line.product_id.type == 'service'
@@ -321,7 +342,7 @@ class AccountMove(models.Model):
                 )
             )
             for line in self.invoice_line_ids
-            if line.display_type == 'product'
+            if line.display_type in ('product', False) or line.product_id
         )
         limit = PT_SIMPLIFIED_INVOICE_SERVICES_LIMIT if has_services else PT_SIMPLIFIED_INVOICE_GOODS_LIMIT
         if total_amount_in_eur > limit:
@@ -347,7 +368,7 @@ class AccountMove(models.Model):
                 payment.amount,
                 self.currency_id,
                 self.company_id,
-                payment.date or self.invoice_date or fields.Date.context_today(self),
+                payment.date or self.invoice_date or self._l10n_pt_local_date(),
             )
             for payment in payments
         )
@@ -357,7 +378,89 @@ class AccountMove(models.Model):
         pt_moves = self.filtered(lambda m: m._l10n_pt_country_ok())
         if any(m.move_type == 'out_refund' and not m.reversed_entry_id for m in pt_moves):
             raise UserError(self.env._("You cannot post a credit note without referencing the original invoice."))
-        pt_moves._check_reversal_amounts_and_quantities(only_reconciled=False)
+        pt_moves.filtered('reversed_entry_id')._check_reversal_amounts_and_quantities(only_reconciled=False)
+
+    def _check_reversal_amounts_and_quantities(self, only_reconciled=True):
+        """
+        The purpose of these credit note checks is to confirm that neither the
+        quantities nor the monetary amounts exceed their values on the source
+        customer invoice, which is a requirement in some countries.
+        """
+        for move in self.filtered('reversed_entry_id'):
+            original_move = move.reversed_entry_id
+            if only_reconciled:
+                reversals = original_move._get_reconciled_invoices().filtered(lambda m: m.move_type == 'out_refund')
+            else:
+                reversals = (move | original_move.reversal_move_ids.filtered(lambda m: m.state == 'posted'))
+
+            if len(set(original_move.mapped('currency_id') + reversals.mapped('currency_id'))) != 1:
+                continue
+
+            original_quantities = defaultdict(lambda: 0)
+            reverse_quantities = defaultdict(lambda: 0)
+
+            for line in original_move.invoice_line_ids.filtered(lambda l: l.display_type == 'product'):
+                original_quantities[line.product_id] += line.product_uom_id._compute_quantity(line.quantity, line.product_id.uom_id)
+            for line in reversals.invoice_line_ids.filtered(lambda l: l.display_type == 'product'):
+                reverse_quantities[line.product_id] += line.product_uom_id._compute_quantity(line.quantity, line.product_id.uom_id)
+
+            exceeding_quantities = []
+            for product, quantity in reverse_quantities.items():
+                if product not in original_quantities:
+                    exceeding_quantities.append(self.env._("'%s' is not present on the original invoice.", product.name))
+                elif (excess := quantity - original_quantities[product]) > 0:
+                    exceeding_quantities.append(
+                        self.env._(
+                            "'%(product_name)s' exceeds quantity on original invoice by %(excess)f %(uom_name)s",
+                            product_name=product.name,
+                            excess=excess,
+                            uom_name=product.uom_id.name,
+                        )
+                    )
+
+            if exceeding_quantities:
+                if len(reversals) > 1:
+                    raise UserError(self.env._(
+                        "This credit note in conjunction with %(other_credit_notes)s has items of a quantity exceeding "
+                        "that of the original customer invoice %(original_invoice)s. Please correct the quantity of "
+                        "these lines before confirming:\n%(lines_to_correct)s",
+                        other_credit_notes=', '.join(
+                            rec.name or f"the credit note with ID {rec.id}"
+                            for rec in (reversals - move)
+                        ),
+                        original_invoice=original_move.name,
+                        lines_to_correct='\n'.join(exceeding_quantities),
+                    ))
+                raise UserError(self.env._(
+                    "This credit note has items of a quantity exceeding that of the original "
+                    "customer invoice %(original_invoice)s. Please correct the quantity of these lines before "
+                    "confirming:\n%(lines_to_correct)s",
+                    original_invoice=original_move.name,
+                    lines_to_correct='\n'.join(exceeding_quantities),
+                ))
+
+            credit_note_total = abs(sum(m.amount_total_in_currency_signed for m in reversals))
+            excess = abs(credit_note_total) - abs(original_move.amount_total_in_currency_signed)
+
+            if float_compare(excess, 0, precision_digits=2) > 0:
+                if len(reversals) > 1:
+                    raise UserError(self.env._(
+                        "This credit note in conjunction with %(other_credit_notes)s exceeds the amount on the "
+                        "original customer invoice %(original_invoice)s. "
+                        "Please adjust this credit note to a total value equal to or less than %(total_value)d before confirming.",
+                        other_credit_notes=', '.join(
+                            rec.name or f"the credit note with ID {rec.id}"
+                            for rec in (reversals - move)
+                        ),
+                        original_invoice=original_move.name,
+                        total_value=abs(move.amount_total_in_currency_signed) - excess,
+                    ))
+                raise UserError(self.env._(
+                    "This credit note exceeds the amount of the original customer invoice %(original_invoice)s. "
+                    "Please adjust this credit note to a total value equal to or less than %(total_value)d before confirming.",
+                    original_invoice=original_move.name,
+                    total_value=abs(move.amount_total_in_currency_signed) - excess,
+                ))
 
     def action_open_reprint_wizard(self, action_to_return=None):
         action = self.env.ref('l10n_pt_certification.action_open_reprint_wizard').read()[0]
@@ -428,45 +531,37 @@ class AccountMove(models.Model):
 
     @api.depends('move_type', 'l10n_pt_document_type', 'invoice_date', 'journal_id', 'company_id')
     def _compute_l10n_pt_at_series_id(self):
-        # Do not recompute AT series if move already has one and journal of AT series matches the move journal
-        today = fields.Date.today()
         at_series_model = self.env['l10n_pt.at.series']
-        moves_to_compute = self.filtered(
-            lambda m: (
-                m._l10n_pt_country_ok()
-                and m.journal_id
-                and (
-                    not m.l10n_pt_at_series_id
-                    or m.l10n_pt_at_series_id.journal_id != m.journal_id
-                    or m.l10n_pt_at_series_id.document_type != m.l10n_pt_document_type
-                    or not m.l10n_pt_at_series_id.active
-                    or not m.l10n_pt_at_series_id._l10n_pt_is_valid_on(m.invoice_date or today)
-                )
-            )
-        )
-        for move in moves_to_compute:
-            # Get the last move with an AT series for this journal and document type
-            last_move = self.env['account.move'].search([
-                ('id', '!=', move.id),
-                ('company_id', '=', move.company_id.id),
-                ('journal_id', '=', move.journal_id.id),
-                ('l10n_pt_document_type', '=', move.l10n_pt_document_type),
-                ('l10n_pt_at_series_id', '!=', False),
-                ('l10n_pt_at_series_id.active', '=', True),
-                *at_series_model._l10n_pt_validity_domain(
-                    move.invoice_date or today, prefix='l10n_pt_at_series_id.',
-                ),
-            ], order='id desc', limit=1)
-            # If no AT series used in a move in this journal, fallback to an active series for this journal
-            at_series = last_move.l10n_pt_at_series_id or at_series_model.search([
-                *at_series_model._l10n_pt_company_domain(move.company_id),
-                *at_series_model._l10n_pt_validity_domain(move.invoice_date or today),
-                ('journal_id', '=', move.journal_id.id),
-                ('document_type', '=', move.l10n_pt_document_type),
-                ('active', '=', True),
-            ], limit=1)
+        moves_to_check = self.filtered(lambda m: m._l10n_pt_country_ok() and m.journal_id)
+        for move in moves_to_check:
+            today = move._l10n_pt_local_date()
+            doc_date = move.invoice_date or move.date or today
+            if (
+                not move.l10n_pt_at_series_id
+                or move.l10n_pt_at_series_id.journal_id != move.journal_id
+                or move.l10n_pt_at_series_id.document_type != move.l10n_pt_document_type
+                or not move.l10n_pt_at_series_id._l10n_pt_is_valid_on(doc_date)
+            ):
+                # Get the last move with an AT series for this journal and document type
+                last_move = self.env['account.move'].search([
+                    ('id', '!=', move.id),
+                    ('company_id', '=', move.company_id.id),
+                    ('journal_id', '=', move.journal_id.id),
+                    ('l10n_pt_document_type', '=', move.l10n_pt_document_type),
+                    ('l10n_pt_at_series_id', '!=', False),
+                    *at_series_model._l10n_pt_validity_domain(
+                        doc_date, prefix='l10n_pt_at_series_id.',
+                    ),
+                ], order='id desc', limit=1)
+                # If no AT series used in a move in this journal, fallback to a series valid for this date
+                at_series = last_move.l10n_pt_at_series_id or at_series_model.with_context(active_test=False).search([
+                    *at_series_model._l10n_pt_company_domain(move.company_id),
+                    *at_series_model._l10n_pt_validity_domain(doc_date),
+                    ('journal_id', '=', move.journal_id.id),
+                    ('document_type', '=', move.l10n_pt_document_type),
+                ], limit=1)
 
-            move.l10n_pt_at_series_id = at_series
+                move.l10n_pt_at_series_id = at_series
 
     ####################################
     # HASH AND QR CODE
@@ -477,16 +572,26 @@ class AccountMove(models.Model):
             return super()._get_integrity_hash_fields()
         return ['invoice_date', 'l10n_pt_hashed_on', 'amount_total_signed', 'move_type', 'name', 'l10n_pt_document_number']
 
+    @api.depends('inalterable_hash')
+    def _compute_l10n_pt_atcud(self):
+        for move in self:
+            if move._l10n_pt_country_ok() and not move.inalterable_hash:
+                move.l10n_pt_atcud = False
+            else:
+                super(AccountMove, move)._compute_l10n_pt_atcud()
+
     def _calculate_hashes(self, previous_hash=None):
         if self.company_id.account_fiscal_country_id.code != 'PT':
             return super()._calculate_hashes(previous_hash=previous_hash)
         previous_hash = previous_hash.split("$")[2] if previous_hash else ""
-        self.l10n_pt_hashed_on = fields.Datetime.now()
+        for move in self:
+            if not move.l10n_pt_hashed_on and not move.inalterable_hash:
+                move.l10n_pt_hashed_on = fields.Datetime.now()
         docs_to_sign = [{
             'id': move.id,
             'sorting_key': move.sequence_number,
-            'date': move.date.isoformat(),
-            'system_entry_date': move.l10n_pt_hashed_on.isoformat(timespec='seconds'),
+            'date': (move.invoice_date or move.date).isoformat(),
+            'system_entry_date': (move.l10n_pt_hashed_on or move.create_date or fields.Datetime.now()).isoformat(timespec='seconds'),
             'name': move._l10n_pt_get_document_number(),
             # As per PT requirements for signature: "In case the document is issued in a foreign currency, the amount
             # must be the counter value in EUR, once this will be the amount exported on the SAF-T (PT) file."
@@ -514,9 +619,17 @@ class AccountMove(models.Model):
     def _compute_l10n_pt_inalterable_hash(self):
         for move in self:
             if move.inalterable_hash:
-                hash_version, hash_str = move.inalterable_hash.split("$")[1:]
-                move.l10n_pt_inalterable_hash_version = int(hash_version)
-                move.l10n_pt_inalterable_hash_short = hash_str[0] + hash_str[10] + hash_str[20] + hash_str[30]
+                parts = move.inalterable_hash.split("$")
+                if len(parts) >= 3:
+                    move.l10n_pt_inalterable_hash_version = int(parts[1]) if parts[1].isdigit() else False
+                    hash_str = parts[2]
+                else:
+                    move.l10n_pt_inalterable_hash_version = False
+                    hash_str = move.inalterable_hash
+                if hash_str and len(hash_str) >= 31:
+                    move.l10n_pt_inalterable_hash_short = hash_str[0] + hash_str[10] + hash_str[20] + hash_str[30]
+                else:
+                    move.l10n_pt_inalterable_hash_short = False
             else:
                 move.l10n_pt_inalterable_hash_version = False
                 move.l10n_pt_inalterable_hash_short = False
@@ -527,7 +640,7 @@ class AccountMove(models.Model):
             return pt_hash_utils.verify_prerequisites_qr_code(self, self.inalterable_hash, self.l10n_pt_atcud)
         return None
 
-    @api.depends('l10n_pt_atcud')
+    @api.depends('l10n_pt_atcud', 'inalterable_hash')
     def _compute_l10n_pt_qr_code_str(self):
         """
         Generate the informational QR code for Portugal invoicing.
@@ -547,10 +660,16 @@ class AccountMove(models.Model):
             :return: {tax_category : {'base': base, 'vat': vat}}
             """
             res = {}
-            tax_groups = account_move.tax_totals['subtotals'][0]['tax_groups']
+            if not account_move.tax_totals or not isinstance(account_move.tax_totals, dict):
+                return res
+            subtotals = account_move.tax_totals.get('subtotals', [])
+            tax_groups = subtotals[0].get('tax_groups', []) if subtotals else []
 
             for group in tax_groups:
-                tax_group = self.env['account.tax.group'].browse(group['id'])
+                group_id = group.get('id') or group.get('tax_group_id')
+                if not group_id:
+                    continue
+                tax_group = self.env['account.tax.group'].browse(group_id)
                 if (
                     tax_group.l10n_pt_tax_region == 'PT-ALL'  # I.e. tax is valid in all regions (PT, PT-AC, PT-MA)
                     or (
@@ -558,22 +677,28 @@ class AccountMove(models.Model):
                         and tax_group.l10n_pt_tax_region == account_move.company_id.l10n_pt_region_code
                     )
                 ):
+                    base_val = group.get('base_amount', group.get('base_amount_currency', 0.0))
+                    tax_val = group.get('tax_amount', group.get('tax_amount_currency', 0.0))
                     res[tax_group.l10n_pt_tax_category] = {
-                        'base': format_amount(account_move, group['base_amount']),
-                        'vat': format_amount(account_move, group['tax_amount']),
+                        'base': format_amount(account_move, base_val),
+                        'vat': format_amount(account_move, tax_val),
                     }
             return res
 
-        for move in self.filtered(lambda m: (
-            m._l10n_pt_country_ok()
-            and m.inalterable_hash
-            and not m.l10n_pt_qr_code_str  # Skip if already computed
-        )):
-            details_by_tax_group = get_details_by_tax_category(move)
+        for move in self:
+            if not (move._l10n_pt_country_ok() and move.inalterable_hash and move.l10n_pt_atcud):
+                move.l10n_pt_qr_code_str = move.l10n_pt_qr_code_str or False
+                continue
 
-            move.l10n_pt_verify_prerequisites_qr_code()
+            try:
+                move.l10n_pt_verify_prerequisites_qr_code()
+            except UserError:
+                move.l10n_pt_qr_code_str = False
+                continue
+
+            details_by_tax_group = get_details_by_tax_category(move)
             # Most of the values needed to create the QR code string are filled in pt_hash_utils, also used by pt_pos and pt_stock
-            qr_code_dict, tax_letter = pt_hash_utils.l10n_pt_common_qr_code_str(move, self.env, move.date)
+            qr_code_dict, tax_letter = pt_hash_utils.l10n_pt_common_qr_code_str(move, self.env, move.invoice_date or move.date)
             qr_code_dict['D:'] = f"{AT_SERIES_TYPE_SAFT_TYPE_MAP[move.l10n_pt_document_type]}*"
             qr_code_dict['H:'] = f"{move.l10n_pt_atcud}*"
             if details_by_tax_group.get('E'):
@@ -582,9 +707,9 @@ class AccountMove(models.Model):
                 if details_by_tax_group.get(tax_category):
                     qr_code_dict[f'{tax_letter}{i * 2 + 3}:'] = f"{details_by_tax_group.get(tax_category)['base']}*"
                     qr_code_dict[f'{tax_letter}{i * 2 + 4}:'] = f"{details_by_tax_group.get(tax_category)['vat']}*"
-            qr_code_dict['N:'] = f"{format_amount(move, move.tax_totals['tax_amount'])}*"
-            qr_code_dict['O:'] = f"{format_amount(move, move.tax_totals['total_amount'])}*"
-            qr_code_dict['Q:'] = f"{move.l10n_pt_inalterable_hash_short}*"
+            qr_code_dict['N:'] = f"{format_amount(move, abs(move.amount_tax_signed))}*"
+            qr_code_dict['O:'] = f"{format_amount(move, abs(move.amount_total_signed))}*"
+            qr_code_dict['Q:'] = f"{move.l10n_pt_inalterable_hash_short or ''}*"
             # Create QR code string from dictionary
             qr_code_str = ''.join(f"{key}{value}" for key, value in sorted(qr_code_dict.items()))
             move.l10n_pt_qr_code_str = urllib.parse.quote_plus(qr_code_str)

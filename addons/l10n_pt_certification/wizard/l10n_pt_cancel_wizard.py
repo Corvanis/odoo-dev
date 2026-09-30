@@ -19,6 +19,8 @@ class L10nPtCancelWizard(models.TransientModel):
             res = records.with_context(allow_draft_hashed_entries=True).button_cancel()
         elif model == 'account.payment':
             res = records.action_cancel()
+        else:
+            res = True
         records.l10n_pt_cancel_reason = self.l10n_pt_cancel_reason.strip()
         # Reset print version, since cancelled documents also have an Original and Reprint version
         records.l10n_pt_print_version = None
