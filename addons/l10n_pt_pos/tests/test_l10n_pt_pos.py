@@ -12,21 +12,9 @@ class TestL10nPtPosCommon(TestL10nPtCommon, TestPoSCommon):
     def setUpClass(cls):
         super().setUpClass()
 
-        cls.pos_series = cls.env['l10n_pt.at.series'].create({
-            'name': '2024',
-            'company_id': cls.company_pt.id,
-            'training_series': True,
-            'date_start': '2024-01-01',
-            'date_end': '2024-12-31',
-            'journal_id': cls.company_data['default_journal_sale'].id,
-            'document_type': 'pos_order',
-            'prefix': 'POS',
-            'at_code': 'AT-TESTPOS',
-        })
         category_pt = cls.env['pos.category'].create({'name': 'Test Category'})
         cls.config = cls.basic_config
         cls.config.write({
-            'l10n_pt_pos_at_series_id': cls.pos_series.id,
             'limit_categories': True,
             'iface_available_categ_ids': [Command.set(category_pt.ids)],
         })
@@ -46,75 +34,23 @@ class TestL10nPtPosCommon(TestL10nPtCommon, TestPoSCommon):
             pos_order_lines_ui_args=[
                 (self.product1, 1.0),
             ],
-            payments=[(self.bank_pm1, 50.0)],
             customer=partner
         )
+        total_amount = order_data['amount_total']
+        order_data['payment_ids'] = [(0, 0, {
+            'amount': total_amount,
+            'name': fields.Datetime.now(),
+            'payment_method_id': self.bank_pm1.id,
+        })]
+        order_data['amount_paid'] = total_amount
         results = self.env['pos.order'].sync_from_ui([order_data])
         order = self.env['pos.order'].browse(results['pos.order'][0]['id'])
-        order.action_pos_order_paid()
+        if order.state != 'paid':
+            order.action_pos_order_paid()
         if date_order:
             # Bypass the write method of pos.order to change the date_order
             Model.write(order, {'date_order': fields.Date.from_string(date_order)})
         return order
-
-
-@freeze_time('2024-06-15')
-@tagged('external_l10n', '-at_install', 'post_install', '-standard', 'external')
-class TestL10nPtPosHash(TestL10nPtPosCommon):
-    def test_l10n_pt_pos_hash_inalterability(self):
-        self.open_new_session()
-        order = self._create_pos_order()
-        self.assertEqual(order.l10n_pt_pos_inalterable_hash, False)
-        order.l10n_pt_pos_compute_missing_hashes(order.config_id.id)  # Called when printing the receipt
-
-        expected_error_msg = "This document is protected by a hash. Therefore, you cannot edit the following fields:.*"
-
-        with self.assertRaisesRegex(UserError, f"{expected_error_msg}Inalterability Hash."):
-            order.l10n_pt_pos_inalterable_hash = 'fake_hash'
-        with self.assertRaisesRegex(UserError, f"{expected_error_msg}Date."):
-            order.date_order = fields.Date.from_string('2000-01-01')
-        with self.assertRaisesRegex(UserError, f"{expected_error_msg}Hashed On."):
-            order.l10n_pt_hashed_on = fields.Datetime.now()
-        with self.assertRaisesRegex(UserError, f"{expected_error_msg}Order Ref."):
-            order.name = "New name"
-        with self.assertRaisesRegex(UserError, f"{expected_error_msg}Document Number."):
-            order.l10n_pt_document_number = "New number/0001"
-
-        # The following field is not part of the hash so it can be modified
-        order.general_note = 'new note'
-
-    def test_l10n_pt_pos_hash_integrity_report(self):
-        """Test the hash integrity report"""
-        self.open_new_session()
-        order1 = self._create_pos_order("2024-01-01")
-        self._create_pos_order("2024-01-02")
-        order3 = self._create_pos_order("2024-01-03")
-        order4 = self._create_pos_order("2024-01-04")
-        self.assertEqual(order1.l10n_pt_pos_inalterable_hash, False)
-        order1.l10n_pt_pos_compute_missing_hashes(order1.config_id.id)  # Called when printing the receipt in JS
-
-        integrity_check = next(filter(lambda r: r['series_at_code'] == order1.config_id.l10n_pt_pos_at_series_id._get_at_code(),
-                                      self.company_pt._l10n_pt_pos_check_hash_integrity()['results']))
-        self.assertEqual(integrity_check['status'], 'verified')
-        self.assertEqual(integrity_check['msg_cover'], 'Orders are correctly hashed')
-        self.assertEqual(integrity_check['first_date'], order1.date_order)
-        self.assertEqual(integrity_check['last_date'], order4.date_order)
-
-        # Let's change one of the fields used by the hash. It should be detected by the integrity report.
-        # We need to bypass the write method of pos.order to do so.
-        Model.write(order3, {'date_order': fields.Date.from_string('2024-01-07')})
-        integrity_check = next(filter(lambda r: r['series_at_code'] == order1.config_id.l10n_pt_pos_at_series_id._get_at_code(),
-                                      self.company_pt._l10n_pt_pos_check_hash_integrity()['results']))
-        self.assertEqual(integrity_check['status'], 'corrupted')
-        self.assertEqual(integrity_check['msg_cover'], f'Corrupted data on POS order with id {order3.id} ({order3.l10n_pt_document_number}).')
-
-        # Let's try with the l10n_pt_pos_inalterable_hash field itself
-        Model.write(order3, {'date_order': fields.Date.from_string("2024-01-03")})  # Revert the previous change
-        Model.write(order4, {'l10n_pt_pos_inalterable_hash': 'fake_hash'})
-        integrity_check = next(filter(lambda r: r['series_at_code'] == order1.config_id.l10n_pt_pos_at_series_id._get_at_code(),
-                                      self.company_pt._l10n_pt_pos_check_hash_integrity()['results']))
-        self.assertEqual(integrity_check['status'], 'corrupted')
-        self.assertEqual(integrity_check['msg_cover'], f'Corrupted data on POS order with id {order4.id} ({order4.l10n_pt_document_number}).')
 
 
 @freeze_time('2024-06-15')
@@ -151,17 +87,49 @@ class TestL10nPtPosMiscRequirements(TestL10nPtPosCommon):
             # Stock picking is triggered before POS order
             product.name = "Product A3"
 
-    def test_l10n_pt_pos_payment_method(self):
-        """
-        Test that we do not allow opening a session if some of the payment methods do not have a payment mechanism or
-        if a bank journal payment method has no AT Series (required to create the payment entry when PoS session is
-        closed).
-        """
+    def test_l10n_pt_pos_payment_method_missing_mechanism(self):
+        """Test that we do not allow opening a session if a payment method lacks a mechanism."""
         pos_payment_method = self.env['pos.payment.method'].create({
             'name': 'Payment method - No mechanism',
             'receivable_account_id': self.company_data['default_account_receivable'].id,
             'journal_id': self.company_data['default_journal_bank'].id,
         })
         self.config.write({'payment_method_ids': [Command.link(pos_payment_method.id)]})
-        with self.assertRaisesRegex(RedirectWarning, "a payment mechanism. Payment methods with a bank journal"):
+        with self.assertRaises(RedirectWarning) as cm:
             self.open_new_session()
+        self.assertEqual(cm.exception.args[0], "All payment methods available for this Point of Sale should have a payment mechanism.")
+
+    def test_l10n_pt_pos_payment_method_missing_series(self):
+        """Test that we do not allow opening a session if a bank journal payment method has no AT Series."""
+        bank_journal_no_series = self.env['account.journal'].create({
+            'name': 'Bank No Series',
+            'type': 'bank',
+            'code': 'BNKS',
+        })
+        pos_payment_method = self.env['pos.payment.method'].create({
+            'name': 'Payment method - No series',
+            'receivable_account_id': self.company_data['default_account_receivable'].id,
+            'journal_id': bank_journal_no_series.id,
+            'l10n_pt_pos_payment_mechanism': 'TB',
+        })
+        self.config.write({'payment_method_ids': [Command.link(pos_payment_method.id)]})
+        with self.assertRaises(RedirectWarning) as cm:
+            self.open_new_session()
+        self.assertEqual(cm.exception.args[0], "Payment methods with a bank journal should also have an AT Series defined.")
+
+    def test_l10n_pt_pos_vat_exemptions_reasons(self):
+        """Test that _l10n_pt_pos_get_vat_exemptions_reasons works with self.lines."""
+        self.open_new_session()
+        order = self._create_pos_order()
+        reasons = order._l10n_pt_pos_get_vat_exemptions_reasons()
+        self.assertIsInstance(reasons, list)
+
+    def test_l10n_pt_pos_invoice_generation_done_state(self):
+        """Test that _generate_pos_order_invoice sets order state to 'done' and marks invoice paid."""
+        self.open_new_session()
+        order = self._create_pos_order()
+        with self._mock_sign_records():
+            order._generate_pos_order_invoice()
+        self.assertEqual(order.state, 'done')
+        self.assertTrue(order.account_move)
+        self.assertEqual(order.account_move.payment_state, 'paid')

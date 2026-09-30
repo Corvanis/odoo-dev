@@ -9,32 +9,28 @@ class PosOrder(models.Model):
     country_code = fields.Char(related='company_id.account_fiscal_country_id.code')
     l10n_pt_is_reprint = fields.Boolean(readonly=True)
 
+    def _prepare_invoice_vals(self):
+        vals = super()._prepare_invoice_vals()
+        if self.country_code == 'PT' and self.partner_id == self.env.ref('l10n_pt_certification.pt_final_consumer', raise_if_not_found=False):
+            vals['move_type'] = 'out_receipt'
+        return vals
+
     def _generate_pos_order_invoice(self):
         if self.country_code != 'PT':
             return super()._generate_pos_order_invoice()
 
-        result = super(PosOrder, self.filtered('partner_id').with_context(generate_pdf=False))._generate_pos_order_invoice()
+        for order in self.filtered(lambda o: not o.partner_id):
+            final_consumer = self.env.ref('l10n_pt_certification.pt_final_consumer', raise_if_not_found=False)
+            if final_consumer:
+                order.partner_id = final_consumer
 
-        for order in self.filtered(lambda o: not o.partner_id and not o.account_move):
-            move = order._create_invoice({
-                'move_type': 'out_receipt',
-                'journal_id': order.session_id.config_id.invoice_journal_id.id,
-                'invoice_origin': order.name,
-                'ref': order.name,
-                'currency_id': order.currency_id.id,
-                'invoice_date': order.date_order.date(),
-                'pos_order_ids': order.ids,
-                'invoice_line_ids': order._prepare_invoice_lines(),
-            })
-            order.state = 'invoiced'
-            move.sudo().with_company(order.company_id)._post()
-
+        result = super(PosOrder, self.with_context(generate_pdf=False))._generate_pos_order_invoice()
         self.env['account.move']._l10n_pt_compute_missing_hashes()
         return result
 
     def _l10n_pt_pos_get_vat_exemptions_reasons(self):
         self.ensure_one()
-        taxes_with_exemption = self.line_ids.tax_ids.filtered(lambda tax: tax.l10n_pt_tax_exemption_reason)
+        taxes_with_exemption = self.lines.tax_ids.filtered(lambda tax: tax.l10n_pt_tax_exemption_reason)
         return sorted(set(taxes_with_exemption.mapped(
             lambda tax: dict(tax._fields['l10n_pt_tax_exemption_reason'].selection).get(tax.l10n_pt_tax_exemption_reason)
         )))
